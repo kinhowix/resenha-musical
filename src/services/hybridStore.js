@@ -12,12 +12,12 @@ import {
 import { INITIAL_SONGS } from '../data/initialSongs';
 
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || 'AIzaSyBeq4Tq8b6Z-5xMzJth2-7BjI8bBwdJx2I',
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || 'resenha-musical.firebaseapp.com',
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || 'resenha-musical',
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || 'resenha-musical.firebasestorage.app',
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || '291158238285',
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || '1:291158238285:web:8727cbfd1cf61adc576804',
 };
 
 export const isFirebaseConfigured = Boolean(
@@ -155,17 +155,30 @@ function notifyLocalSession() {
 export function subscribeToSongs(callback) {
   if (db) {
     const songsCol = collection(db, 'songs');
-    return onSnapshot(songsCol, async (snapshot) => {
-      if (snapshot.empty) {
-        // Faz seed inicial automático se o banco Firestore estiver vazio
-        for (const song of INITIAL_SONGS) {
-          await setDoc(doc(db, 'songs', song.id), song);
+    return onSnapshot(
+      songsCol,
+      async (snapshot) => {
+        if (snapshot.empty) {
+          // Faz seed inicial automático se o banco Firestore estiver vazio
+          try {
+            for (const song of INITIAL_SONGS) {
+              await setDoc(doc(db, 'songs', song.id), song);
+            }
+          } catch (err) {
+            console.warn('Firestore ainda não liberado, usando modo local:', err.message);
+            callback(getLocalSongs());
+          }
+          return;
         }
-        return;
+        const list = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+        callback(list);
+      },
+      (error) => {
+        console.warn('Fallback para armazenamento local em songs:', error.message);
+        localListeners.songs.add(callback);
+        callback(getLocalSongs());
       }
-      const list = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
-      callback(list);
-    });
+    );
   } else {
     localListeners.songs.add(callback);
     callback(getLocalSongs());
@@ -193,27 +206,35 @@ export async function saveSong(songData) {
   };
 
   if (db) {
-    await setDoc(doc(db, 'songs', id), payload, { merge: true });
-  } else {
-    const songs = getLocalSongs();
-    const existingIdx = songs.findIndex((s) => s.id === id);
-    if (existingIdx >= 0) {
-      songs[existingIdx] = { ...songs[existingIdx], ...payload };
-    } else {
-      songs.unshift(payload);
+    try {
+      await setDoc(doc(db, 'songs', id), payload, { merge: true });
+      return payload;
+    } catch (err) {
+      console.warn('Erro ao salvar no Firestore, salvando localmente:', err.message);
     }
-    saveLocalSongs(songs);
   }
+  const songs = getLocalSongs();
+  const existingIdx = songs.findIndex((s) => s.id === id);
+  if (existingIdx >= 0) {
+    songs[existingIdx] = { ...songs[existingIdx], ...payload };
+  } else {
+    songs.unshift(payload);
+  }
+  saveLocalSongs(songs);
   return payload;
 }
 
 export async function removeSong(songId) {
   if (db) {
-    await deleteDoc(doc(db, 'songs', songId));
-  } else {
-    const songs = getLocalSongs().filter((s) => s.id !== songId);
-    saveLocalSongs(songs);
+    try {
+      await deleteDoc(doc(db, 'songs', songId));
+      return;
+    } catch (err) {
+      console.warn('Erro ao excluir no Firestore, excluindo localmente:', err.message);
+    }
   }
+  const songs = getLocalSongs().filter((s) => s.id !== songId);
+  saveLocalSongs(songs);
 }
 
 // ==========================================
@@ -223,15 +244,27 @@ export async function removeSong(songId) {
 export function subscribeToSession(callback, roomId = 'roda-principal') {
   if (db) {
     const sessionRef = doc(db, 'sessions', roomId);
-    return onSnapshot(sessionRef, async (docSnap) => {
-      if (!docSnap.exists()) {
-        const initial = getDefaultSession();
-        await setDoc(sessionRef, initial);
-        callback(initial);
-        return;
+    return onSnapshot(
+      sessionRef,
+      async (docSnap) => {
+        if (!docSnap.exists()) {
+          const initial = getDefaultSession();
+          try {
+            await setDoc(sessionRef, initial);
+          } catch {
+            // fallback
+          }
+          callback(initial);
+          return;
+        }
+        callback(docSnap.data());
+      },
+      (error) => {
+        console.warn('Fallback para armazenamento local em session:', error.message);
+        localListeners.session.add(callback);
+        callback(getLocalSession());
       }
-      callback(docSnap.data());
-    });
+    );
   } else {
     localListeners.session.add(callback);
     callback(getLocalSession());
@@ -241,15 +274,19 @@ export function subscribeToSession(callback, roomId = 'roda-principal') {
 
 export async function updateLiveSession(partialSession, roomId = 'roda-principal') {
   if (db) {
-    const sessionRef = doc(db, 'sessions', roomId);
-    await setDoc(
-      sessionRef,
-      { ...partialSession, updatedAt: new Date().toISOString() },
-      { merge: true }
-    );
-  } else {
-    saveLocalSession(partialSession);
+    try {
+      const sessionRef = doc(db, 'sessions', roomId);
+      await setDoc(
+        sessionRef,
+        { ...partialSession, updatedAt: new Date().toISOString() },
+        { merge: true }
+      );
+      return;
+    } catch (err) {
+      console.warn('Erro ao atualizar sessão no Firestore, atualizando localmente:', err.message);
+    }
   }
+  saveLocalSession(partialSession);
 }
 
 export async function registerSongPlayed(songId, nextSongId, nextTranspose = 0, currentSession) {

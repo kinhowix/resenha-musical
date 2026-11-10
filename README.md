@@ -29,3 +29,4 @@ VITE_FIREBASE_STORAGE_BUCKET=seu_projeto.firebasestorage.app
 VITE_FIREBASE_MESSAGING_SENDER_ID=seu_sender_id
 VITE_FIREBASE_APP_ID=seu_app_id
 ```
+
