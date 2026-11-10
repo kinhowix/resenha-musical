@@ -23,6 +23,9 @@ import {
   subscribeToAppSettings,
   updateMasterPassword,
   createOrSwitchRoom,
+  deleteRoom,
+  deleteOldRooms,
+  clearRoomQueueAndHistory,
   voteOrAddSongToQueue,
 } from './services/hybridStore';
 import ChordViewer from './components/ChordViewer';
@@ -165,6 +168,41 @@ export default function App() {
     const newUrl = `${window.location.pathname}?sala=${encodeURIComponent(roomId)}`;
     window.history.replaceState({}, '', newUrl);
     showToast(`Sala "${roomName}" ativa e pronta para compartilhar!`);
+  };
+
+  // Excluir uma sala específica (Mestre)
+  const handleDeleteRoom = async (targetRoomId, targetRoomName) => {
+    if (targetRoomId === currentRoomId) {
+      if (targetRoomId === 'roda-principal') {
+        await clearRoomQueueAndHistory('roda-principal');
+        await updateLiveSession(
+          { roomName: 'Resenha Musical dos Amigos' },
+          'roda-principal'
+        );
+        showToast('Roda Principal reiniciada e limpa!');
+        return;
+      }
+      // Alterna primeiro para a Roda Principal antes de apagar a sala antiga
+      await handleCreateOrSwitchRoom('Resenha Musical dos Amigos');
+    }
+    await deleteRoom(targetRoomId);
+    showToast(`Sala "${targetRoomName || targetRoomId}" apagada com sucesso!`);
+  };
+
+  // Apagar todas as salas antigas, mantendo apenas a atual (Mestre)
+  const handleDeleteOldRooms = async () => {
+    const count = await deleteOldRooms(currentRoomId);
+    showToast(
+      count > 0
+        ? `${count} ${count === 1 ? 'sala antiga apagada' : 'salas antigas apagadas'}!`
+        : 'Nenhuma sala antiga para apagar.'
+    );
+  };
+
+  // Limpar fila e histórico da sala ativa (Mestre)
+  const handleClearCurrentRoom = async () => {
+    await clearRoomQueueAndHistory(currentRoomId);
+    showToast(`Fila e histórico da sala "${session.roomName}" zerados!`);
   };
 
   // Selecionar música (Mestre)
@@ -520,6 +558,9 @@ export default function App() {
         currentRoomId={currentRoomId}
         currentRoomName={session.roomName}
         onCreateOrSwitchRoom={handleCreateOrSwitchRoom}
+        onDeleteRoom={handleDeleteRoom}
+        onDeleteOldRooms={handleDeleteOldRooms}
+        onClearCurrentRoom={handleClearCurrentRoom}
       />
 
       {/* Toast de Feedback */}

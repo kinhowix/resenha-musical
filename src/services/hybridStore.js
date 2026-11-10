@@ -9,6 +9,7 @@ import {
   updateDoc,
   increment,
   getDoc,
+  getDocs,
 } from 'firebase/firestore';
 import { INITIAL_SONGS } from '../data/initialSongs';
 
@@ -50,6 +51,7 @@ const broadcastChannel =
 const localListeners = {
   songs: new Set(),
   sessions: new Map(), // roomId -> Set of callbacks
+  rooms: new Set(),
   status: new Set(),
   settings: new Set(),
 };
@@ -88,6 +90,8 @@ if (broadcastChannel) {
       notifyLocalSession(roomId);
     } else if (type === 'SETTINGS_UPDATED') {
       notifyLocalSettings();
+    } else if (type === 'ROOMS_UPDATED') {
+      notifyLocalRooms();
     }
   };
 }
@@ -100,6 +104,7 @@ if (typeof window !== 'undefined') {
       notifyLocalSession(roomId);
     }
     if (e.key === LOCAL_SETTINGS_KEY) notifyLocalSettings();
+    if (e.key === LOCAL_ROOMS_LIST_KEY) notifyLocalRooms();
   });
 }
 
@@ -553,11 +558,16 @@ export async function createOrSwitchRoom(roomName, initialSongId) {
 
   // Salva na lista de salas criadas pelo mestre
   try {
-    const listRaw = localStorage.getItem(LOCAL_ROOMS_LIST_KEY);
-    const list = listRaw ? JSON.parse(listRaw) : [];
+    const list = getSavedRoomsList();
     const filtered = list.filter((r) => r.id !== roomId);
-    filtered.unshift({ id: roomId, roomName: cleanName, createdAt: new Date().toISOString() });
-    localStorage.setItem(LOCAL_ROOMS_LIST_KEY, JSON.stringify(filtered.slice(0, 15)));
+    filtered.unshift({
+      id: roomId,
+      roomName: cleanName,
+      updatedAt: new Date().toISOString(),
+    });
+    localStorage.setItem(LOCAL_ROOMS_LIST_KEY, JSON.stringify(filtered.slice(0, 30)));
+    notifyLocalRooms();
+    broadcastChannel?.postMessage({ type: 'ROOMS_UPDATED' });
   } catch {
     // ignore
   }
@@ -565,16 +575,214 @@ export async function createOrSwitchRoom(roomName, initialSongId) {
   return { roomId, roomName: cleanName };
 }
 
+function notifyLocalRooms() {
+  const list = getSavedRoomsList();
+  localListeners.rooms.forEach((cb) => cb(list));
+}
+
 export function getSavedRoomsList() {
   try {
+    const map = new Map();
+
+    // 1. Lê da lista salva
     const raw = localStorage.getItem(LOCAL_ROOMS_LIST_KEY);
-    if (!raw) {
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        parsed.forEach((r) => {
+          if (r && r.id) {
+            map.set(r.id, {
+              id: r.id,
+              roomName: r.roomName || r.id,
+              updatedAt: r.updatedAt || r.createdAt || null,
+            });
+          }
+        });
+      }
+    }
+
+    // 2. Descobre sessões salvas no localStorage (caso existam salas antigas)
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith(LOCAL_SESSION_PREFIX)) {
+        const roomId = key.replace(LOCAL_SESSION_PREFIX, '');
+        if (roomId && !map.has(roomId)) {
+          try {
+            const sess = JSON.parse(localStorage.getItem(key) || '{}');
+            map.set(roomId, {
+              id: roomId,
+              roomName: sess.roomName || roomId,
+              updatedAt: sess.updatedAt || null,
+            });
+          } catch {
+            map.set(roomId, { id: roomId, roomName: roomId });
+          }
+        }
+      }
+    }
+
+    if (map.size === 0) {
       return [{ id: 'roda-principal', roomName: 'Resenha Musical dos Amigos' }];
     }
-    return JSON.parse(raw);
+
+    return Array.from(map.values());
   } catch {
     return [{ id: 'roda-principal', roomName: 'Resenha Musical dos Amigos' }];
   }
+}
+
+/**
+ * Inscreve na lista de salas (combina Firestore 'sessions' + localStorage em tempo real)
+ */
+export function subscribeToRooms(callback) {
+  localListeners.rooms.add(callback);
+  callback(getSavedRoomsList());
+
+  let unsubFirestore = null;
+  if (db) {
+    const sessionsCol = collection(db, 'sessions');
+    unsubFirestore = onSnapshot(
+      sessionsCol,
+      (snapshot) => {
+        const cloudRooms = snapshot.docs.map((d) => {
+          const data = d.data() || {};
+          return {
+            id: d.id,
+            roomName: data.roomName || d.id,
+            updatedAt: data.updatedAt || null,
+            queueCount: Array.isArray(data.queue) ? data.queue.length : 0,
+          };
+        });
+
+        if (cloudRooms.length > 0) {
+          localStorage.setItem(LOCAL_ROOMS_LIST_KEY, JSON.stringify(cloudRooms));
+          callback(cloudRooms);
+        } else {
+          callback(getSavedRoomsList());
+        }
+      },
+      () => {
+        callback(getSavedRoomsList());
+      }
+    );
+  }
+
+  return () => {
+    localListeners.rooms.delete(callback);
+    unsubFirestore?.();
+  };
+}
+
+/**
+ * Exclui uma sala específica (do Firestore e do navegador local)
+ */
+export async function deleteRoom(roomId) {
+  if (!roomId) return;
+
+  // Remove do localStorage
+  try {
+    localStorage.removeItem(LOCAL_SESSION_PREFIX + roomId);
+    const raw = localStorage.getItem(LOCAL_ROOMS_LIST_KEY);
+    if (raw) {
+      const list = JSON.parse(raw);
+      if (Array.isArray(list)) {
+        const filtered = list.filter((r) => r.id !== roomId);
+        localStorage.setItem(LOCAL_ROOMS_LIST_KEY, JSON.stringify(filtered));
+      }
+    }
+  } catch {
+    // ignore
+  }
+
+  // Remove do Firebase Firestore
+  if (db) {
+    try {
+      await withTimeout(deleteDoc(doc(db, 'sessions', roomId)), 3500);
+    } catch (err) {
+      console.warn('Erro ao excluir sala na nuvem:', err.message);
+    }
+  }
+
+  notifyLocalRooms();
+  broadcastChannel?.postMessage({ type: 'ROOMS_UPDATED' });
+}
+
+/**
+ * Apaga TODAS as salas antigas, mantendo apenas a sala ativa atual (`keepRoomId`)
+ */
+export async function deleteOldRooms(keepRoomId = 'roda-principal') {
+  const idsToDelete = new Set();
+
+  // Coleta salas locais
+  try {
+    const localList = getSavedRoomsList();
+    localList.forEach((r) => {
+      if (r.id && r.id !== keepRoomId) idsToDelete.add(r.id);
+    });
+
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith(LOCAL_SESSION_PREFIX)) {
+        const id = key.replace(LOCAL_SESSION_PREFIX, '');
+        if (id && id !== keepRoomId) idsToDelete.add(id);
+      }
+    }
+  } catch {
+    // ignore
+  }
+
+  // Coleta e apaga salas na nuvem (Firestore)
+  if (db) {
+    try {
+      const snap = await withTimeout(getDocs(collection(db, 'sessions')), 4000);
+      snap.docs.forEach((d) => {
+        if (d.id !== keepRoomId) idsToDelete.add(d.id);
+      });
+    } catch {
+      // ignore
+    }
+  }
+
+  for (const id of idsToDelete) {
+    try {
+      localStorage.removeItem(LOCAL_SESSION_PREFIX + id);
+    } catch {
+      // ignore
+    }
+    if (db) {
+      try {
+        await withTimeout(deleteDoc(doc(db, 'sessions', id)), 3500);
+      } catch {
+        // ignore
+      }
+    }
+  }
+
+  // Mantém apenas a sala atual na lista local
+  try {
+    const currentSess = getLocalSession(keepRoomId);
+    const remaining = [
+      {
+        id: keepRoomId,
+        roomName: currentSess.roomName || keepRoomId,
+        updatedAt: new Date().toISOString(),
+      },
+    ];
+    localStorage.setItem(LOCAL_ROOMS_LIST_KEY, JSON.stringify(remaining));
+  } catch {
+    // ignore
+  }
+
+  notifyLocalRooms();
+  broadcastChannel?.postMessage({ type: 'ROOMS_UPDATED' });
+  return idsToDelete.size;
+}
+
+/**
+ * Limpa a fila de votação e o histórico da sala ativa (Reiniciar Sala)
+ */
+export async function clearRoomQueueAndHistory(roomId = 'roda-principal') {
+  return await updateLiveSession({ queue: [], history: [] }, roomId);
 }
 
 /**
