@@ -1,0 +1,11 @@
+{
+  "name": "Resenha Musical - Cifras em Roda",
+  "short_name": "Resenha",
+  "description": "App de Cifras e Jukebox em Tempo Real para tocar com os amigos",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#09090b",
+  "theme_color": "#f59e0b",
+  "orientation": "portrait-primary"
+}
+
