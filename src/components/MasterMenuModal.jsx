@@ -1,0 +1,349 @@
+import React, { useState } from 'react';
+import { QRCodeSVG } from 'qrcode.react';
+import {
+  KeyRound,
+  Lock,
+  Unlock,
+  PlusCircle,
+  Copy,
+  Check,
+  Share2,
+  X,
+  ShieldCheck,
+  Radio,
+} from 'lucide-react';
+import { getSavedRoomsList } from '../services/hybridStore';
+
+export default function MasterMenuModal({
+  isOpen,
+  onClose,
+  isMaster,
+  masterPassword,
+  onUnlockMaster,
+  onLockMaster,
+  onChangePassword,
+  currentRoomId,
+  currentRoomName,
+  onCreateOrSwitchRoom,
+}) {
+  const [passwordInput, setPasswordInput] = useState('');
+  const [loginError, setLoginError] = useState('');
+
+  // Campos para criar/renomear sala
+  const [newRoomName, setNewRoomName] = useState(currentRoomName || '');
+  const [copied, setCopied] = useState(false);
+
+  // Campos para alterar a senha mestre
+  const [showChangePass, setShowChangePass] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
+  const [passSavedMsg, setPassSavedMsg] = useState('');
+
+  if (!isOpen) return null;
+
+  const savedRooms = getSavedRoomsList();
+
+  const roomShareUrl =
+    typeof window !== 'undefined'
+      ? `${window.location.origin}${window.location.pathname}?sala=${encodeURIComponent(
+          currentRoomId
+        )}`
+      : `https://resenha-musical.vercel.app/?sala=${currentRoomId}`;
+
+  const handleLogin = (e) => {
+    e.preventDefault();
+    if (passwordInput.trim() === masterPassword) {
+      setLoginError('');
+      setPasswordInput('');
+      onUnlockMaster();
+    } else {
+      setLoginError('Senha Mestre incorreta. Tente novamente!');
+    }
+  };
+
+  const handleCreateRoom = (e) => {
+    e.preventDefault();
+    if (!newRoomName.trim()) return;
+    onCreateOrSwitchRoom(newRoomName.trim());
+  };
+
+  const handleCopyLink = () => {
+    navigator.clipboard?.writeText(roomShareUrl);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2500);
+  };
+
+  const handleShareWhatsApp = () => {
+    const text = `🎸 Entra aí na nossa sala *${currentRoomName}* no Resenha Musical para acompanhar as cifras ao vivo e votar nas próximas músicas:\n${roomShareUrl}`;
+    window.open(
+      `https://wa.me/?text=${encodeURIComponent(text)}`,
+      '_blank',
+      'noopener,noreferrer'
+    );
+  };
+
+  const handleSaveNewPassword = (e) => {
+    e.preventDefault();
+    if (newPassword.trim().length < 4) return;
+    onChangePassword(newPassword.trim());
+    setNewPassword('');
+    setShowChangePass(false);
+    setPassSavedMsg('Senha Mestre atualizada com sucesso!');
+    setTimeout(() => setPassSavedMsg(''), 3500);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 overflow-y-auto">
+      <div className="bg-zinc-900 border border-zinc-800 rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden my-8">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-800 bg-zinc-950/60">
+          <div className="flex items-center gap-2.5">
+            <div
+              className={`p-2 rounded-xl ${
+                isMaster
+                  ? 'bg-emerald-500/20 text-emerald-400'
+                  : 'bg-amber-500/20 text-amber-400'
+              }`}
+            >
+              {isMaster ? (
+                <Unlock className="w-5 h-5" />
+              ) : (
+                <Lock className="w-5 h-5" />
+              )}
+            </div>
+            <div>
+              <h2 className="text-lg font-extrabold text-white">
+                {isMaster ? 'Painel do Mestre da Roda' : 'Acesso Mestre'}
+              </h2>
+              <p className="text-xs text-zinc-400">
+                {isMaster
+                  ? 'Gerencie a sala, envie o link para os amigos ou altere sua senha'
+                  : 'Exclusivo para o anfitrião criar salas e gerenciar cifras'}
+              </p>
+            </div>
+          </div>
+
+          <button
+            onClick={onClose}
+            className="p-2 text-zinc-400 hover:text-white rounded-lg hover:bg-zinc-800 cursor-pointer"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* TELA DE LOGIN COM SENHA MESTRE */}
+        {!isMaster ? (
+          <form onSubmit={handleLogin} className="p-6 space-y-4">
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-zinc-400 mb-2">
+                Digite a Senha Mestre
+              </label>
+              <div className="relative">
+                <KeyRound className="w-5 h-5 text-zinc-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <input
+                  type="password"
+                  required
+                  autoFocus
+                  value={passwordInput}
+                  onChange={(e) => setPasswordInput(e.target.value)}
+                  placeholder="••••••••••••"
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl pl-11 pr-4 py-3 text-sm text-white focus:outline-none focus:border-amber-500"
+                />
+              </div>
+              {loginError && (
+                <p className="text-xs text-red-400 mt-2 font-semibold">
+                  {loginError}
+                </p>
+              )}
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-4 py-2.5 rounded-xl bg-zinc-800 text-zinc-300 text-sm font-medium cursor-pointer"
+              >
+                Voltar como Convidado
+              </button>
+              <button
+                type="submit"
+                className="px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 text-sm font-extrabold shadow-lg shadow-amber-500/20 cursor-pointer"
+              >
+                Entrar como Mestre
+              </button>
+            </div>
+          </form>
+        ) : (
+          /* PAINEL DO MESTRE LOGADO */
+          <div className="p-6 space-y-6 max-h-[82vh] overflow-y-auto">
+            {/* 1. Criar / Definir Nome da Sala */}
+            <div className="bg-zinc-950/80 border border-zinc-800 rounded-2xl p-4 space-y-3">
+              <label className="block text-xs font-extrabold uppercase tracking-wider text-amber-400">
+                1. Criar ou Mudar Sala da Resenha
+              </label>
+              <form onSubmit={handleCreateRoom} className="flex gap-2">
+                <input
+                  type="text"
+                  value={newRoomName}
+                  onChange={(e) => setNewRoomName(e.target.value)}
+                  placeholder="Ex: Churrasco do Kinho, Resenha de Sábado..."
+                  className="flex-1 bg-zinc-900 border border-zinc-700 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-amber-500"
+                />
+                <button
+                  type="submit"
+                  className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 font-extrabold text-xs sm:text-sm cursor-pointer shrink-0"
+                >
+                  <PlusCircle className="w-4 h-4" /> Ativar Sala
+                </button>
+              </form>
+
+              {/* Salas recentes */}
+              {savedRooms.length > 1 && (
+                <div className="pt-2">
+                  <span className="text-[11px] text-zinc-400 block mb-1.5">
+                    Salas criadas anteriormente:
+                  </span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {savedRooms.map((r) => (
+                      <button
+                        key={r.id}
+                        type="button"
+                        onClick={() => {
+                          setNewRoomName(r.roomName);
+                          onCreateOrSwitchRoom(r.roomName);
+                        }}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-semibold border transition cursor-pointer ${
+                          r.id === currentRoomId
+                            ? 'bg-amber-500/20 border-amber-500 text-amber-300'
+                            : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white'
+                        }`}
+                      >
+                        {r.roomName}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* 2. Link de Atalho e QR Code para Enviar aos Amigos */}
+            <div className="bg-zinc-950/80 border border-zinc-800 rounded-2xl p-4 flex flex-col items-center text-center space-y-3">
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/15 text-emerald-400 text-xs font-bold">
+                <Radio className="w-3.5 h-3.5" /> Sala Ativa: {currentRoomName}
+              </div>
+
+              <p className="text-xs text-zinc-300">
+                Envie este link para os seus amigos! Quem entrar por ele cai direto no menu simplificado da sala{' '}
+                <strong className="text-white">{currentRoomName}</strong> (sem precisar de senha):
+              </p>
+
+              <div className="bg-white p-3 rounded-2xl shadow-lg">
+                <QRCodeSVG
+                  value={roomShareUrl}
+                  size={150}
+                  bgColor="#ffffff"
+                  fgColor="#09090b"
+                  level="M"
+                />
+              </div>
+
+              <div className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-xs font-mono text-amber-300 truncate">
+                {roomShareUrl}
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 w-full pt-1">
+                <button
+                  type="button"
+                  onClick={handleCopyLink}
+                  className="flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white text-xs font-bold transition cursor-pointer"
+                >
+                  {copied ? (
+                    <>
+                      <Check className="w-4 h-4 text-emerald-400" /> Atalho Copiado!
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-4 h-4" /> Copiar Atalho
+                    </>
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleShareWhatsApp}
+                  className="flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-zinc-950 text-xs font-extrabold transition cursor-pointer"
+                >
+                  <Share2 className="w-4 h-4" /> Enviar no WhatsApp
+                </button>
+              </div>
+            </div>
+
+            {/* 3. Alterar Senha Mestre ou Sair do Modo Mestre */}
+            <div className="border-t border-zinc-800 pt-4 space-y-3">
+              {passSavedMsg && (
+                <p className="text-xs text-emerald-400 font-bold">
+                  {passSavedMsg}
+                </p>
+              )}
+
+              {!showChangePass ? (
+                <div className="flex items-center justify-between gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowChangePass(true)}
+                    className="flex items-center gap-1.5 text-xs text-zinc-400 hover:text-amber-400 font-medium cursor-pointer"
+                  >
+                    <ShieldCheck className="w-4 h-4" /> Alterar Senha Mestre
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onLockMaster();
+                      onClose();
+                    }}
+                    className="px-3.5 py-2 rounded-xl bg-red-500/15 hover:bg-red-500/25 text-red-300 text-xs font-bold transition cursor-pointer"
+                  >
+                    Bloquear Modo Mestre (Ver como Convidado)
+                  </button>
+                </div>
+              ) : (
+                <form
+                  onSubmit={handleSaveNewPassword}
+                  className="bg-zinc-950 border border-zinc-800 rounded-xl p-3 space-y-2.5"
+                >
+                  <label className="block text-xs font-bold text-zinc-300">
+                    Nova Senha Mestre:
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      required
+                      minLength={4}
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      placeholder="Digite a nova senha..."
+                      className="flex-1 bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-amber-500"
+                    />
+                    <button
+                      type="submit"
+                      className="px-3 py-1.5 rounded-lg bg-amber-500 text-zinc-950 text-xs font-bold cursor-pointer"
+                    >
+                      Salvar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowChangePass(false)}
+                      className="px-2.5 py-1.5 rounded-lg bg-zinc-800 text-zinc-400 text-xs cursor-pointer"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                </form>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

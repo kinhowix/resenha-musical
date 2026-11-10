@@ -7,9 +7,12 @@ import {
   Cloud,
   HardDrive,
   Plus,
+  Lock,
+  Unlock,
+  Share2,
 } from 'lucide-react';
 import {
-  isFirebaseConfigured,
+  DEFAULT_MASTER_PASSWORD,
   subscribeToSongs,
   saveSong,
   removeSong,
@@ -17,29 +20,56 @@ import {
   updateLiveSession,
   registerSongPlayed,
   subscribeToConnectionStatus,
+  subscribeToAppSettings,
+  updateMasterPassword,
+  createOrSwitchRoom,
+  voteOrAddSongToQueue,
 } from './services/hybridStore';
 import ChordViewer from './components/ChordViewer';
 import SongListView from './components/SongListView';
 import JukeboxView from './components/JukeboxView';
 import HistoryView from './components/HistoryView';
 import SongFormModal from './components/SongFormModal';
+import GuestRoomView from './components/GuestRoomView';
+import MasterMenuModal from './components/MasterMenuModal';
+
+const MASTER_AUTH_STORAGE_KEY = 'resenha_is_master_authenticated_v1';
 
 export default function App() {
   const [songs, setSongs] = useState([]);
+  const [appSettings, setAppSettings] = useState({
+    masterPassword: DEFAULT_MASTER_PASSWORD,
+    activeRoomId: 'roda-principal',
+  });
+
+  // Identifica a sala pelo link (?sala=nome-da-sala) ou usa a sala ativa do Mestre
+  const [urlRoomId, setUrlRoomId] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get('sala') || null;
+  });
+
+  const currentRoomId = urlRoomId || appSettings.activeRoomId || 'roda-principal';
+
   const [session, setSession] = useState({
+    id: currentRoomId,
+    roomName: 'Resenha Musical dos Amigos',
     currentSongId: null,
     transpose: 0,
     queue: [],
     history: [],
   });
 
-  // Se o usuário abrir pelo link do QR Code (?tab=jukebox), já cai na Jukebox
+  // Estado de autenticação do Mestre (persiste no navegador do Mestre)
+  const [isMaster, setIsMaster] = useState(() => {
+    return localStorage.getItem(MASTER_AUTH_STORAGE_KEY) === 'true';
+  });
+  const [isMasterModalOpen, setIsMasterModalOpen] = useState(false);
+
   const [activeTab, setActiveTab] = useState(() => {
     const params = new URLSearchParams(window.location.search);
     return params.get('tab') || 'viewer';
   });
 
-  // Permite desligar o sync caso alguém queira olhar outra cifra sozinho sem mudar a roda
   const [syncRoom, setSyncRoom] = useState(true);
   const [localSongId, setLocalSongId] = useState(null);
   const [localTranspose, setLocalTranspose] = useState(0);
@@ -48,31 +78,45 @@ export default function App() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingSong, setEditingSong] = useState(null);
   const [toast, setToast] = useState(null);
-  const [connStatus, setConnStatus] = useState({ mode: 'connecting', error: null });
+  const [connStatus, setConnStatus] = useState({
+    mode: 'connecting',
+    error: null,
+  });
 
   const showToast = (msg) => {
     setToast(msg);
-    setTimeout(() => setToast(null), 3000);
+    setTimeout(() => setToast(null), 3200);
   };
 
-  // Inscreve nas músicas e na sessão em tempo real (Firestore onSnapshot ou Local Broadcast)
+  // Inscreve nas configurações globais e lista de músicas
   useEffect(() => {
     const unsubSongs = subscribeToSongs((list) => {
       setSongs(list);
     });
-    const unsubSession = subscribeToSession((sess) => {
-      setSession(sess);
-    });
     const unsubStatus = subscribeToConnectionStatus((st) => {
       setConnStatus(st);
+    });
+    const unsubSettings = subscribeToAppSettings((settings) => {
+      setAppSettings(settings);
     });
 
     return () => {
       unsubSongs?.();
-      unsubSession?.();
       unsubStatus?.();
+      unsubSettings?.();
     };
   }, []);
+
+  // Inscreve na sessão em tempo real da Sala atual (currentRoomId)
+  useEffect(() => {
+    const unsubSession = subscribeToSession((sess) => {
+      setSession(sess);
+    }, currentRoomId);
+
+    return () => {
+      unsubSession?.();
+    };
+  }, [currentRoomId]);
 
   const effectiveSongId = syncRoom
     ? session.currentSongId || songs[0]?.id
@@ -92,10 +136,41 @@ export default function App() {
     return songs.find((s) => s.id === nextQueueItem.songId) || null;
   }, [songs, nextQueueItem]);
 
-  // Selecionar música
+  // Autenticação Mestre
+  const handleUnlockMaster = () => {
+    setIsMaster(true);
+    localStorage.setItem(MASTER_AUTH_STORAGE_KEY, 'true');
+    showToast('Modo Mestre desbloqueado! Bem-vindo!');
+  };
+
+  const handleLockMaster = () => {
+    setIsMaster(false);
+    localStorage.removeItem(MASTER_AUTH_STORAGE_KEY);
+    showToast('Modo Convidado ativado.');
+  };
+
+  const handleChangeMasterPassword = async (newPass) => {
+    await updateMasterPassword(newPass);
+    showToast('Senha Mestre alterada com sucesso!');
+  };
+
+  // Criar ou alternar Sala pelo Mestre
+  const handleCreateOrSwitchRoom = async (roomNameInput) => {
+    const { roomId, roomName } = await createOrSwitchRoom(
+      roomNameInput,
+      currentSong?.id
+    );
+    setUrlRoomId(roomId);
+    // Atualiza a URL sem recarregar a página para já facilitar o compartilhamento
+    const newUrl = `${window.location.pathname}?sala=${encodeURIComponent(roomId)}`;
+    window.history.replaceState({}, '', newUrl);
+    showToast(`Sala "${roomName}" ativa e pronta para compartilhar!`);
+  };
+
+  // Selecionar música (Mestre)
   const handleSelectSong = async (songId) => {
     if (syncRoom) {
-      await updateLiveSession({ currentSongId: songId, transpose: 0 });
+      await updateLiveSession({ currentSongId: songId, transpose: 0 }, currentRoomId);
     } else {
       setLocalSongId(songId);
       setLocalTranspose(0);
@@ -106,32 +181,25 @@ export default function App() {
   // Alterar tom (+1 / -1 semitom)
   const handleTransposeChange = async (newTranspose) => {
     if (syncRoom) {
-      await updateLiveSession({ transpose: newTranspose });
+      await updateLiveSession({ transpose: newTranspose }, currentRoomId);
     } else {
       setLocalTranspose(newTranspose);
     }
   };
 
-  // Adicionar música na Fila da Jukebox
-  const handleAddToQueue = async (songId, requestedBy = 'Amigo') => {
-    const newItem = {
-      queueId: `q-${Date.now()}`,
-      songId,
-      requestedBy,
-      addedAt: new Date().toISOString(),
-    };
-    const updatedQueue = [...(session.queue || []), newItem];
-    await updateLiveSession({ queue: updatedQueue });
+  // Votar / Escolher música para a Fila com Ranking de Pontos
+  const handleVoteOrAddSong = async (songId, voterName = 'Amigo da Roda') => {
+    await voteOrAddSongToQueue(songId, voterName, session, currentRoomId);
     const songTitle = songs.find((s) => s.id === songId)?.title || 'Música';
-    showToast(`"${songTitle}" adicionada na fila por ${requestedBy}!`);
+    showToast(`+1 ponto para "${songTitle}" no ranking da fila!`);
   };
 
-  // Remover item da fila
+  // Remover item da fila (Mestre)
   const handleRemoveFromQueue = async (queueId) => {
     const updatedQueue = (session.queue || []).filter(
       (item) => item.queueId !== queueId
     );
-    await updateLiveSession({ queue: updatedQueue });
+    await updateLiveSession({ queue: updatedQueue }, currentRoomId);
   };
 
   // Tocar item da fila imediatamente e registrar a anterior como tocada
@@ -144,18 +212,22 @@ export default function App() {
         currentSong.id,
         queueItem.songId,
         0,
-        session
+        session,
+        currentRoomId
       );
     }
-    await updateLiveSession({
-      currentSongId: queueItem.songId,
-      transpose: 0,
-      queue: updatedQueue,
-    });
+    await updateLiveSession(
+      {
+        currentSongId: queueItem.songId,
+        transpose: 0,
+        queue: updatedQueue,
+      },
+      currentRoomId
+    );
     setActiveTab('viewer');
   };
 
-  // Pular para a próxima música da fila
+  // Pular para a próxima música mais votada da fila
   const handleNextInQueue = async () => {
     if (!nextQueueItem) return;
     await handlePlayFromQueue(nextQueueItem);
@@ -167,7 +239,8 @@ export default function App() {
       songId,
       songId,
       effectiveTranspose,
-      session
+      session,
+      currentRoomId
     );
     showToast('Música salva no histórico de Tocadas da Resenha!');
   };
@@ -177,9 +250,8 @@ export default function App() {
     const isEditing = Boolean(songData.id);
     const saved = await saveSong(songData);
     showToast(`"${saved.title}" salva no repertório!`);
-    // Se acabou de cadastrar uma música nova, já seleciona ela ou garante que está visível!
     if (!isEditing) {
-      await updateLiveSession({ currentSongId: saved.id, transpose: 0 });
+      await updateLiveSession({ currentSongId: saved.id, transpose: 0 }, currentRoomId);
     }
   };
 
@@ -197,27 +269,27 @@ export default function App() {
     <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col">
       {/* Header Principal */}
       <header className="sticky top-0 z-40 bg-zinc-950/90 backdrop-blur-md border-b border-zinc-800/80">
-        <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between gap-3">
-          {/* Logo */}
+        <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between gap-2">
+          {/* Logo & Nome da Sala */}
           <div
             onClick={() => setActiveTab('viewer')}
-            className="flex items-center gap-2.5 cursor-pointer"
+            className="flex items-center gap-2.5 cursor-pointer min-w-0"
           >
-            <div className="w-10 h-10 rounded-xl bg-amber-500 text-zinc-950 flex items-center justify-center shadow-lg shadow-amber-500/20">
+            <div className="w-10 h-10 rounded-xl bg-amber-500 text-zinc-950 flex items-center justify-center shadow-lg shadow-amber-500/20 shrink-0">
               <Guitar className="w-6 h-6 stroke-[2.2]" />
             </div>
-            <div>
+            <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <span className="font-extrabold text-base sm:text-lg tracking-tight text-white">
-                  Resenha Musical
+                <span className="font-extrabold text-sm sm:text-lg tracking-tight text-white truncate">
+                  {session.roomName || 'Resenha Musical'}
                 </span>
                 <span
                   title={
                     connStatus.mode === 'cloud'
                       ? 'Conectado e sincronizando no Firebase Firestore!'
-                      : 'Salvo no navegador (Ative o Firestore Database em Modo de Teste no painel do Firebase para sincronizar na nuvem)'
+                      : 'Modo Local'
                   }
-                  className={`hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border ${
+                  className={`hidden md:inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border shrink-0 ${
                     connStatus.mode === 'cloud'
                       ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
                       : 'bg-amber-500/10 border-amber-500/30 text-amber-400'
@@ -225,159 +297,210 @@ export default function App() {
                 >
                   {connStatus.mode === 'cloud' ? (
                     <>
-                      <Cloud className="w-3 h-3" /> Firebase Ativo
+                      <Cloud className="w-3 h-3" /> Ao Vivo
                     </>
                   ) : (
                     <>
-                      <HardDrive className="w-3 h-3" /> Modo Local (Firestore Pendente)
+                      <HardDrive className="w-3 h-3" /> Local
                     </>
                   )}
                 </span>
               </div>
-              <p className="text-[11px] text-zinc-400 hidden sm:block">
-                Cifras em Roda • Sincronização em Tempo Real
+              <p className="text-[11px] text-zinc-400 truncate">
+                {isMaster
+                  ? 'Painel Mestre Ativo • Controle Total da Roda'
+                  : 'Resenha Musical • Sincronizado em Tempo Real'}
               </p>
             </div>
           </div>
 
-          {/* Navegação por Abas */}
-          <nav className="flex items-center gap-0.5 sm:gap-1 bg-zinc-900 border border-zinc-800 rounded-xl p-1">
-            <button
-              onClick={() => setActiveTab('viewer')}
-              className={`flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg text-[11px] sm:text-xs font-semibold transition cursor-pointer ${
-                activeTab === 'viewer'
-                  ? 'bg-amber-500 text-zinc-950 shadow'
-                  : 'text-zinc-400 hover:text-white'
-              }`}
-            >
-              <Guitar className="w-3.5 h-3.5 shrink-0" />
-              <span>Cifra</span>
-            </button>
+          {/* Navegação por Abas (Exclusiva para o Mestre; Convidados veem a tela unificada super simples) */}
+          {isMaster && (
+            <nav className="flex items-center gap-0.5 sm:gap-1 bg-zinc-900 border border-zinc-800 rounded-xl p-1">
+              <button
+                onClick={() => setActiveTab('viewer')}
+                className={`flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg text-[11px] sm:text-xs font-semibold transition cursor-pointer ${
+                  activeTab === 'viewer'
+                    ? 'bg-amber-500 text-zinc-950 shadow'
+                    : 'text-zinc-400 hover:text-white'
+                }`}
+              >
+                <Guitar className="w-3.5 h-3.5 shrink-0" />
+                <span>Cifra</span>
+              </button>
+
+              <button
+                onClick={() => setActiveTab('repertoire')}
+                className={`flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg text-[11px] sm:text-xs font-semibold transition cursor-pointer ${
+                  activeTab === 'repertoire'
+                    ? 'bg-amber-500 text-zinc-950 shadow'
+                    : 'text-zinc-400 hover:text-white'
+                }`}
+              >
+                <BookOpen className="w-3.5 h-3.5 shrink-0" />
+                <span>Músicas ({songs.length})</span>
+              </button>
+
+              <button
+                onClick={() => setActiveTab('jukebox')}
+                className={`flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg text-[11px] sm:text-xs font-semibold transition cursor-pointer ${
+                  activeTab === 'jukebox'
+                    ? 'bg-amber-500 text-zinc-950 shadow'
+                    : 'text-zinc-400 hover:text-white'
+                }`}
+              >
+                <Disc3 className="w-3.5 h-3.5 shrink-0" />
+                <span>Ranking</span>
+                {session.queue?.length > 0 && (
+                  <span
+                    className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
+                      activeTab === 'jukebox'
+                        ? 'bg-zinc-950 text-amber-400'
+                        : 'bg-amber-500 text-zinc-950'
+                    }`}
+                  >
+                    {session.queue.length}
+                  </span>
+                )}
+              </button>
+
+              <button
+                onClick={() => setActiveTab('history')}
+                className={`flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg text-[11px] sm:text-xs font-semibold transition cursor-pointer ${
+                  activeTab === 'history'
+                    ? 'bg-amber-500 text-zinc-950 shadow'
+                    : 'text-zinc-400 hover:text-white'
+                }`}
+              >
+                <History className="w-3.5 h-3.5 shrink-0" />
+                <span className="hidden sm:inline">Tocadas</span>
+              </button>
+            </nav>
+          )}
+
+          {/* Ações do Topo: Botão Sala/Mestre + Nova Cifra */}
+          <div className="flex items-center gap-2 shrink-0">
+            {isMaster && (
+              <button
+                onClick={() => {
+                  setEditingSong(null);
+                  setIsModalOpen(true);
+                }}
+                className="hidden lg:flex items-center gap-1.5 px-3 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 text-xs font-extrabold transition cursor-pointer"
+              >
+                <Plus className="w-4 h-4 stroke-[2.5]" /> Nova Cifra
+              </button>
+            )}
 
             <button
-              onClick={() => setActiveTab('repertoire')}
-              className={`flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg text-[11px] sm:text-xs font-semibold transition cursor-pointer ${
-                activeTab === 'repertoire'
-                  ? 'bg-amber-500 text-zinc-950 shadow'
-                  : 'text-zinc-400 hover:text-white'
+              onClick={() => setIsMasterModalOpen(true)}
+              title={
+                isMaster
+                  ? 'Configurar Sala e Compartilhar Atalho'
+                  : 'Acesso Mestre (Anfitrião)'
+              }
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold border transition cursor-pointer ${
+                isMaster
+                  ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/25'
+                  : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white'
               }`}
             >
-              <BookOpen className="w-3.5 h-3.5 shrink-0" />
-              <span>Músicas ({songs.length})</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('jukebox')}
-              className={`flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg text-[11px] sm:text-xs font-semibold transition cursor-pointer ${
-                activeTab === 'jukebox'
-                  ? 'bg-amber-500 text-zinc-950 shadow'
-                  : 'text-zinc-400 hover:text-white'
-              }`}
-            >
-              <Disc3 className="w-3.5 h-3.5 shrink-0" />
-              <span>Jukebox</span>
-              {session.queue?.length > 0 && (
-                <span
-                  className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
-                    activeTab === 'jukebox'
-                      ? 'bg-zinc-950 text-amber-400'
-                      : 'bg-amber-500 text-zinc-950'
-                  }`}
-                >
-                  {session.queue.length}
-                </span>
+              {isMaster ? (
+                <>
+                  <Share2 className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Sala & Convite</span>
+                </>
+              ) : (
+                <>
+                  <Lock className="w-3.5 h-3.5" />
+                  <span>Mestre</span>
+                </>
               )}
             </button>
-
-            <button
-              onClick={() => setActiveTab('history')}
-              className={`flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg text-[11px] sm:text-xs font-semibold transition cursor-pointer ${
-                activeTab === 'history'
-                  ? 'bg-amber-500 text-zinc-950 shadow'
-                  : 'text-zinc-400 hover:text-white'
-              }`}
-            >
-              <History className="w-3.5 h-3.5 shrink-0" />
-              <span className="hidden sm:inline">Tocadas</span>
-            </button>
-          </nav>
-
-          {/* Atalho Nova Música */}
-          <button
-            onClick={() => {
-              setEditingSong(null);
-              setIsModalOpen(true);
-            }}
-            className="hidden md:flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-amber-400 text-xs font-bold transition cursor-pointer"
-          >
-            <Plus className="w-4 h-4" /> Nova Cifra
-          </button>
+          </div>
         </div>
       </header>
 
       {/* Conteúdo Principal */}
-      <main className="flex-1 max-w-6xl w-full mx-auto px-4 pt-6">
-        {activeTab === 'viewer' && (
-          <ChordViewer
-            song={currentSong}
-            transpose={effectiveTranspose}
-            onTransposeChange={handleTransposeChange}
-            onNextInQueue={handleNextInQueue}
-            onMarkPlayed={handleMarkPlayed}
-            onEditSong={(song) => {
-              setEditingSong(song);
-              setIsModalOpen(true);
-            }}
-            queueCount={session.queue?.length || 0}
-            nextSongTitle={nextSongObj?.title}
-            syncRoom={syncRoom}
-            onToggleSyncRoom={() => {
-              setSyncRoom((prev) => !prev);
-              setLocalSongId(currentSong?.id);
-              setLocalTranspose(effectiveTranspose);
-            }}
-          />
-        )}
-
-        {activeTab === 'repertoire' && (
-          <SongListView
+      <main className="flex-1 max-w-6xl w-full mx-auto px-4 pt-5">
+        {!isMaster ? (
+          /* VISÃO INTUITIVA PARA OS AMIGOS / CONVIDADOS DA SALA */
+          <GuestRoomView
+            roomName={session.roomName}
             songs={songs}
-            currentSongId={currentSong?.id}
-            onSelectSong={handleSelectSong}
-            onAddToQueue={handleAddToQueue}
-            onNewSong={() => {
-              setEditingSong(null);
-              setIsModalOpen(true);
-            }}
-            onEditSong={(song) => {
-              setEditingSong(song);
-              setIsModalOpen(true);
-            }}
-            onDeleteSong={handleDeleteSong}
-          />
-        )}
-
-        {activeTab === 'jukebox' && (
-          <JukeboxView
-            songs={songs}
-            queue={session.queue || []}
             currentSong={currentSong}
-            onPlayFromQueue={handlePlayFromQueue}
-            onRemoveFromQueue={handleRemoveFromQueue}
-            onAddToQueue={handleAddToQueue}
+            transpose={effectiveTranspose}
+            queue={session.queue || []}
+            onVoteSong={handleVoteOrAddSong}
           />
-        )}
+        ) : (
+          /* VISÃO COMPLETA DO MESTRE */
+          <>
+            {activeTab === 'viewer' && (
+              <ChordViewer
+                song={currentSong}
+                transpose={effectiveTranspose}
+                onTransposeChange={handleTransposeChange}
+                onNextInQueue={handleNextInQueue}
+                onMarkPlayed={handleMarkPlayed}
+                onEditSong={(song) => {
+                  setEditingSong(song);
+                  setIsModalOpen(true);
+                }}
+                queueCount={session.queue?.length || 0}
+                nextSongTitle={nextSongObj?.title}
+                syncRoom={syncRoom}
+                onToggleSyncRoom={() => {
+                  setSyncRoom((prev) => !prev);
+                  setLocalSongId(currentSong?.id);
+                  setLocalTranspose(effectiveTranspose);
+                }}
+              />
+            )}
 
-        {activeTab === 'history' && (
-          <HistoryView
-            songs={songs}
-            history={session.history || []}
-            onSelectSong={handleSelectSong}
-          />
+            {activeTab === 'repertoire' && (
+              <SongListView
+                songs={songs}
+                currentSongId={currentSong?.id}
+                onSelectSong={handleSelectSong}
+                onAddToQueue={handleVoteOrAddSong}
+                onNewSong={() => {
+                  setEditingSong(null);
+                  setIsModalOpen(true);
+                }}
+                onEditSong={(song) => {
+                  setEditingSong(song);
+                  setIsModalOpen(true);
+                }}
+                onDeleteSong={handleDeleteSong}
+              />
+            )}
+
+            {activeTab === 'jukebox' && (
+              <JukeboxView
+                roomId={currentRoomId}
+                roomName={session.roomName}
+                songs={songs}
+                queue={session.queue || []}
+                currentSong={currentSong}
+                onPlayFromQueue={handlePlayFromQueue}
+                onRemoveFromQueue={handleRemoveFromQueue}
+                onAddToQueue={handleVoteOrAddSong}
+              />
+            )}
+
+            {activeTab === 'history' && (
+              <HistoryView
+                songs={songs}
+                history={session.history || []}
+                onSelectSong={handleSelectSong}
+              />
+            )}
+          </>
         )}
       </main>
 
-      {/* Modal de Cadastro / Edição de Música */}
+      {/* Modal de Cadastro / Edição de Música (Mestre) */}
       <SongFormModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
@@ -385,13 +508,26 @@ export default function App() {
         initialData={editingSong}
       />
 
+      {/* Modal de Acesso Mestre / Criação de Sala & Link para Amigos */}
+      <MasterMenuModal
+        isOpen={isMasterModalOpen}
+        onClose={() => setIsMasterModalOpen(false)}
+        isMaster={isMaster}
+        masterPassword={appSettings.masterPassword || DEFAULT_MASTER_PASSWORD}
+        onUnlockMaster={handleUnlockMaster}
+        onLockMaster={handleLockMaster}
+        onChangePassword={handleChangeMasterPassword}
+        currentRoomId={currentRoomId}
+        currentRoomName={session.roomName}
+        onCreateOrSwitchRoom={handleCreateOrSwitchRoom}
+      />
+
       {/* Toast de Feedback */}
       {toast && (
-        <div className="fixed bottom-6 right-6 z-50 bg-amber-500 text-zinc-950 font-bold text-xs sm:text-sm px-4 py-3 rounded-xl shadow-2xl animate-bounce">
+        <div className="fixed bottom-6 right-6 z-50 bg-amber-500 text-zinc-950 font-extrabold text-xs sm:text-sm px-4 py-3 rounded-xl shadow-2xl animate-bounce">
           {toast}
         </div>
       )}
     </div>
   );
 }
-

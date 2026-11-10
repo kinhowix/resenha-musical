@@ -6,13 +6,17 @@ import {
   Play,
   Trash2,
   PlusCircle,
-  Users,
+  Trophy,
   Sparkles,
   Copy,
   Check,
+  ThumbsUp,
+  Share2,
 } from 'lucide-react';
 
 export default function JukeboxView({
+  roomId = 'roda-principal',
+  roomName = 'Resenha Musical',
   songs,
   queue = [],
   currentSong,
@@ -26,8 +30,10 @@ export default function JukeboxView({
 
   const shareUrl =
     typeof window !== 'undefined'
-      ? `${window.location.origin}${window.location.pathname}?tab=jukebox`
-      : 'https://resenha-musical.vercel.app/?tab=jukebox';
+      ? `${window.location.origin}${window.location.pathname}?sala=${encodeURIComponent(
+          roomId
+        )}`
+      : `https://resenha-musical.vercel.app/?sala=${roomId}`;
 
   const handleAddRequest = (e) => {
     e.preventDefault();
@@ -40,6 +46,15 @@ export default function JukeboxView({
     navigator.clipboard?.writeText(shareUrl);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const shareWhatsApp = () => {
+    const text = `🎸 Entra aí na nossa sala *${roomName}* no Resenha Musical para acompanhar as cifras ao vivo e votar nas próximas músicas:\n${shareUrl}`;
+    window.open(
+      `https://wa.me/?text=${encodeURIComponent(text)}`,
+      '_blank',
+      'noopener,noreferrer'
+    );
   };
 
   return (
@@ -55,7 +70,7 @@ export default function JukeboxView({
               </div>
               <div>
                 <span className="text-[10px] font-bold uppercase tracking-widest text-amber-400">
-                  Rolando Agora na Roda
+                  Rolando Agora na Sala &ldquo;{roomName}&rdquo;
                 </span>
                 <h3 className="text-lg font-extrabold text-white">
                   {currentSong.title}
@@ -68,11 +83,11 @@ export default function JukeboxView({
           </div>
         )}
 
-        {/* Adicionar Pedido Rápido (Celular dos Amigos) */}
+        {/* Adicionar Pedido / Voto Rápido */}
         <div className="bg-zinc-900/80 border border-zinc-800 rounded-2xl p-5">
           <h3 className="text-base font-bold text-white flex items-center gap-2 mb-3">
             <Sparkles className="w-4 h-4 text-amber-400" />
-            Pedir Música na Jukebox
+            Adicionar ou Votar em Música na Fila
           </h3>
 
           <form
@@ -108,22 +123,22 @@ export default function JukeboxView({
                 type="submit"
                 className="w-full flex items-center justify-center gap-1.5 py-2.5 px-4 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold text-sm shadow-lg shadow-amber-500/20 transition cursor-pointer"
               >
-                <PlusCircle className="w-4 h-4" /> Entrar na Fila
+                <PlusCircle className="w-4 h-4" /> +1 Ponto
               </button>
             </div>
           </form>
         </div>
 
-        {/* Lista da Fila de Reprodução */}
+        {/* Lista da Fila de Reprodução Ordenada por Pontos/Votos */}
         <div className="bg-zinc-900/60 border border-zinc-800 rounded-2xl p-5">
           <div className="flex items-center justify-between mb-4">
             <div>
               <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                <Users className="w-5 h-5 text-amber-500" />
-                Próximas da Roda ({queue.length})
+                <Trophy className="w-5 h-5 text-amber-500" />
+                Ranking da Fila ({queue.length})
               </h3>
               <p className="text-xs text-zinc-400">
-                Ordem dos pedidos feitos pelos amigos em tempo real
+                Ordenado automaticamente pelas músicas com mais pontos dos amigos
               </p>
             </div>
           </div>
@@ -132,7 +147,7 @@ export default function JukeboxView({
             <div className="text-center py-12 border border-dashed border-zinc-800 rounded-xl text-zinc-500">
               <p className="text-sm">A fila está vazia no momento.</p>
               <p className="text-xs mt-1">
-                Peça uma música acima ou escaneie o QR Code ao lado!
+                Compartilhe o QR Code ao lado para os amigos votarem nas músicas!
               </p>
             </div>
           ) : (
@@ -140,24 +155,44 @@ export default function JukeboxView({
               {queue.map((item, idx) => {
                 const song = songs.find((s) => s.id === item.songId);
                 if (!song) return null;
+                const votes = item.votes ?? 1;
+                const votersList = Array.isArray(item.voters)
+                  ? item.voters.join(', ')
+                  : item.requestedBy || 'Galera';
 
                 return (
                   <div
                     key={item.queueId}
-                    className="flex items-center justify-between gap-3 bg-zinc-950/80 border border-zinc-800/90 rounded-xl p-3.5 hover:border-zinc-700 transition"
+                    className={`flex items-center justify-between gap-3 border rounded-xl p-3.5 transition ${
+                      idx === 0
+                        ? 'bg-amber-500/10 border-amber-500/40'
+                        : 'bg-zinc-950/80 border-zinc-800/90 hover:border-zinc-700'
+                    }`}
                   >
                     <div className="flex items-center gap-3.5 min-w-0">
-                      <span className="w-7 h-7 rounded-lg bg-zinc-800 text-amber-400 font-mono text-xs font-bold flex items-center justify-center shrink-0">
-                        #{idx + 1}
+                      <span
+                        className={`w-8 h-8 rounded-lg font-mono text-xs font-extrabold flex items-center justify-center shrink-0 ${
+                          idx === 0
+                            ? 'bg-amber-500 text-zinc-950'
+                            : 'bg-zinc-800 text-amber-400'
+                        }`}
+                      >
+                        {idx + 1}º
                       </span>
                       <div className="min-w-0">
-                        <h4 className="font-bold text-white text-sm truncate">
-                          {song.title}
-                        </h4>
+                        <div className="flex items-center gap-2">
+                          <h4 className="font-bold text-white text-sm truncate">
+                            {song.title}
+                          </h4>
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 text-[11px] font-extrabold">
+                            <ThumbsUp className="w-3 h-3" /> {votes}{' '}
+                            {votes === 1 ? 'pt' : 'pts'}
+                          </span>
+                        </div>
                         <p className="text-xs text-zinc-400 truncate">
                           {song.artist} •{' '}
                           <span className="text-amber-400/90 font-medium">
-                            Pedido por {item.requestedBy || 'Galera'}
+                            Votos: {votersList}
                           </span>
                         </p>
                       </div>
@@ -168,7 +203,7 @@ export default function JukeboxView({
                         onClick={() => onPlayFromQueue(item)}
                         className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold text-xs transition cursor-pointer"
                       >
-                        <Play className="w-3.5 h-3.5 fill-current" /> Puxar Agora
+                        <Play className="w-3.5 h-3.5 fill-current" /> Tocar Agora
                       </button>
                       <button
                         onClick={() => onRemoveFromQueue(item.queueId)}
@@ -186,15 +221,15 @@ export default function JukeboxView({
         </div>
       </div>
 
-      {/* Coluna Direita: QR Code da Roda */}
+      {/* Coluna Direita: QR Code da Sala */}
       <div className="space-y-6">
         <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 flex flex-col items-center text-center">
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/15 text-amber-400 text-xs font-semibold mb-3">
-            <QrCode className="w-3.5 h-3.5" /> Jukebox Coletiva
+            <QrCode className="w-3.5 h-3.5" /> Convite da Sala
           </div>
-          <h3 className="text-lg font-bold text-white">QR Code da Roda</h3>
+          <h3 className="text-lg font-bold text-white">{roomName}</h3>
           <p className="text-xs text-zinc-400 mt-1 mb-5">
-            Seus amigos escaneiam este QR Code no celular para acompanhar a cifra sincronizada e adicionar músicas na fila!
+            Seus amigos escaneiam este QR Code ou entram pelo link para ver a música tocando agora e votar no ranking da fila!
           </p>
 
           <div className="bg-white p-4 rounded-2xl shadow-xl">
@@ -207,23 +242,31 @@ export default function JukeboxView({
             />
           </div>
 
-          <button
-            onClick={copyLink}
-            className="mt-5 w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-semibold transition cursor-pointer"
-          >
-            {copied ? (
-              <>
-                <Check className="w-4 h-4 text-emerald-400" /> Link Copiado!
-              </>
-            ) : (
-              <>
-                <Copy className="w-4 h-4" /> Copiar Link da Roda
-              </>
-            )}
-          </button>
+          <div className="w-full space-y-2.5 mt-5">
+            <button
+              onClick={copyLink}
+              className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-semibold transition cursor-pointer"
+            >
+              {copied ? (
+                <>
+                  <Check className="w-4 h-4 text-emerald-400" /> Link Copiado!
+                </>
+              ) : (
+                <>
+                  <Copy className="w-4 h-4" /> Copiar Atalho da Sala
+                </>
+              )}
+            </button>
+
+            <button
+              onClick={shareWhatsApp}
+              className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-zinc-950 text-xs font-extrabold transition cursor-pointer"
+            >
+              <Share2 className="w-4 h-4" /> Compartilhar no WhatsApp
+            </button>
+          </div>
         </div>
       </div>
     </div>
   );
 }
-
