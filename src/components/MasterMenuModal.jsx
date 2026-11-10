@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import {
   KeyRound,
@@ -11,8 +11,11 @@ import {
   X,
   ShieldCheck,
   Radio,
+  Trash2,
+  RotateCcw,
+  Sparkles,
 } from 'lucide-react';
-import { getSavedRoomsList } from '../services/hybridStore';
+import { subscribeToRooms } from '../services/hybridStore';
 
 export default function MasterMenuModal({
   isOpen,
@@ -25,9 +28,14 @@ export default function MasterMenuModal({
   currentRoomId,
   currentRoomName,
   onCreateOrSwitchRoom,
+  onDeleteRoom,
+  onDeleteOldRooms,
+  onClearCurrentRoom,
 }) {
   const [passwordInput, setPasswordInput] = useState('');
   const [loginError, setLoginError] = useState('');
+  const [roomsList, setRoomsList] = useState([]);
+  const [isCleaning, setIsCleaning] = useState(false);
 
   // Campos para criar/renomear sala
   const [newRoomName, setNewRoomName] = useState(currentRoomName || '');
@@ -38,9 +46,25 @@ export default function MasterMenuModal({
   const [newPassword, setNewPassword] = useState('');
   const [passSavedMsg, setPassSavedMsg] = useState('');
 
+  useEffect(() => {
+    setNewRoomName(currentRoomName || '');
+  }, [currentRoomName]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const unsub = subscribeToRooms((list) => {
+      setRoomsList(list);
+    });
+    return () => unsub?.();
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
-  const savedRooms = getSavedRoomsList();
+  const savedRooms =
+    roomsList.length > 0
+      ? roomsList
+      : [{ id: currentRoomId, roomName: currentRoomName || 'Resenha Musical' }];
+  const oldRoomsCount = savedRooms.filter((r) => r.id !== currentRoomId).length;
 
   const roomShareUrl =
     typeof window !== 'undefined'
@@ -196,33 +220,117 @@ export default function MasterMenuModal({
                 </button>
               </form>
 
-              {/* Salas recentes */}
-              {savedRooms.length > 1 && (
-                <div className="pt-2">
-                  <span className="text-[11px] text-zinc-400 block mb-1.5">
-                    Salas criadas anteriormente:
+              {/* Gerenciamento de Salas e Comandos do Nível Mestre */}
+              <div className="pt-3 border-t border-zinc-800/80 space-y-2.5">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[11px] font-bold text-zinc-300">
+                    Salas registradas ({savedRooms.length}):
                   </span>
-                  <div className="flex flex-wrap gap-1.5">
-                    {savedRooms.map((r) => (
-                      <button
+                  {oldRoomsCount > 0 && (
+                    <button
+                      type="button"
+                      disabled={isCleaning}
+                      onClick={async () => {
+                        if (
+                          !window.confirm(
+                            `Deseja apagar TODAS as ${oldRoomsCount} salas antigas do banco de dados e manter apenas a sala atual "${currentRoomName}"?`
+                          )
+                        ) {
+                          return;
+                        }
+                        setIsCleaning(true);
+                        await onDeleteOldRooms?.();
+                        setIsCleaning(false);
+                      }}
+                      className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-red-500/15 hover:bg-red-500/25 border border-red-500/30 text-red-300 text-[11px] font-bold transition cursor-pointer disabled:opacity-50"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>
+                        {isCleaning
+                          ? 'Apagando...'
+                          : `Apagar Salas Antigas (${oldRoomsCount})`}
+                      </span>
+                    </button>
+                  )}
+                </div>
+
+                <div className="space-y-1.5 max-h-44 overflow-y-auto pr-1">
+                  {savedRooms.map((r) => {
+                    const isCurrent = r.id === currentRoomId;
+                    return (
+                      <div
                         key={r.id}
-                        type="button"
-                        onClick={() => {
-                          setNewRoomName(r.roomName);
-                          onCreateOrSwitchRoom(r.roomName);
-                        }}
-                        className={`px-2.5 py-1 rounded-lg text-xs font-semibold border transition cursor-pointer ${
-                          r.id === currentRoomId
-                            ? 'bg-amber-500/20 border-amber-500 text-amber-300'
-                            : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white'
+                        className={`flex items-center justify-between gap-2 px-3 py-2 rounded-xl border text-xs transition ${
+                          isCurrent
+                            ? 'bg-amber-500/15 border-amber-500/50 text-amber-300'
+                            : 'bg-zinc-900 border-zinc-800 text-zinc-300 hover:border-zinc-700'
                         }`}
                       >
-                        {r.roomName}
-                      </button>
-                    ))}
-                  </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setNewRoomName(r.roomName);
+                            onCreateOrSwitchRoom(r.roomName);
+                          }}
+                          className="flex items-center gap-2 min-w-0 flex-1 text-left cursor-pointer"
+                        >
+                          <Radio
+                            className={`w-3.5 h-3.5 shrink-0 ${
+                              isCurrent ? 'text-amber-400' : 'text-zinc-500'
+                            }`}
+                          />
+                          <span className="font-bold truncate">{r.roomName}</span>
+                          {isCurrent && (
+                            <span className="px-1.5 py-0.5 rounded bg-amber-500 text-zinc-950 text-[10px] font-extrabold uppercase shrink-0">
+                              Ativa
+                            </span>
+                          )}
+                        </button>
+
+                        <button
+                          type="button"
+                          title={
+                            isCurrent
+                              ? 'Apagar esta sala e voltar para a Roda Principal'
+                              : `Apagar sala "${r.roomName}"`
+                          }
+                          onClick={async () => {
+                            const msg = isCurrent
+                              ? `Deseja apagar a sala atual "${r.roomName}" e voltar para a Roda Principal?`
+                              : `Deseja apagar permanentemente a sala antiga "${r.roomName}"?`;
+                            if (!window.confirm(msg)) return;
+                            await onDeleteRoom?.(r.id, r.roomName);
+                          }}
+                          className="p-1.5 rounded-lg text-zinc-400 hover:text-red-400 hover:bg-red-500/15 transition cursor-pointer shrink-0"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    );
+                  })}
                 </div>
-              )}
+
+                {/* Comandos Rápidos do Mestre para Limpeza */}
+                <div className="pt-2 flex flex-wrap items-center justify-between gap-2">
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (
+                        !window.confirm(
+                          `Deseja zerar a fila de votação e o histórico da sala "${currentRoomName}"?`
+                        )
+                      ) {
+                        return;
+                      }
+                      await onClearCurrentRoom?.();
+                    }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-zinc-300 text-xs font-semibold transition cursor-pointer"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Zerar Fila e Histórico da Sala Atual</span>
+                  </button>
+                </div>
+              </div>
             </div>
 
             {/* 2. Link de Atalho e QR Code para Enviar aos Amigos */}
