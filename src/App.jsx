@@ -16,6 +16,7 @@ import {
   subscribeToSession,
   updateLiveSession,
   registerSongPlayed,
+  subscribeToConnectionStatus,
 } from './services/hybridStore';
 import ChordViewer from './components/ChordViewer';
 import SongListView from './components/SongListView';
@@ -47,6 +48,7 @@ export default function App() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingSong, setEditingSong] = useState(null);
   const [toast, setToast] = useState(null);
+  const [connStatus, setConnStatus] = useState({ mode: 'connecting', error: null });
 
   const showToast = (msg) => {
     setToast(msg);
@@ -61,10 +63,14 @@ export default function App() {
     const unsubSession = subscribeToSession((sess) => {
       setSession(sess);
     });
+    const unsubStatus = subscribeToConnectionStatus((st) => {
+      setConnStatus(st);
+    });
 
     return () => {
       unsubSongs?.();
       unsubSession?.();
+      unsubStatus?.();
     };
   }, []);
 
@@ -168,9 +174,11 @@ export default function App() {
 
   // Salvar (Criar ou Atualizar) música
   const handleSaveSong = async (songData) => {
+    const isEditing = Boolean(songData.id);
     const saved = await saveSong(songData);
     showToast(`"${saved.title}" salva no repertório!`);
-    if (!session.currentSongId) {
+    // Se acabou de cadastrar uma música nova, já seleciona ela ou garante que está visível!
+    if (!isEditing) {
       await updateLiveSession({ currentSongId: saved.id, transpose: 0 });
     }
   };
@@ -205,23 +213,23 @@ export default function App() {
                 </span>
                 <span
                   title={
-                    isFirebaseConfigured
-                      ? 'Conectado ao Firebase Firestore em Tempo Real'
-                      : 'Modo Híbrido Local (Sincronizado entre abas + Pronto para Firebase)'
+                    connStatus.mode === 'cloud'
+                      ? 'Conectado e sincronizando no Firebase Firestore!'
+                      : 'Salvo no navegador (Ative o Firestore Database em Modo de Teste no painel do Firebase para sincronizar na nuvem)'
                   }
                   className={`hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border ${
-                    isFirebaseConfigured
+                    connStatus.mode === 'cloud'
                       ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
                       : 'bg-amber-500/10 border-amber-500/30 text-amber-400'
                   }`}
                 >
-                  {isFirebaseConfigured ? (
+                  {connStatus.mode === 'cloud' ? (
                     <>
-                      <Cloud className="w-3 h-3" /> Firebase Cloud
+                      <Cloud className="w-3 h-3" /> Firebase Ativo
                     </>
                   ) : (
                     <>
-                      <HardDrive className="w-3 h-3" /> Modo Híbrido Local
+                      <HardDrive className="w-3 h-3" /> Modo Local (Firestore Pendente)
                     </>
                   )}
                 </span>
