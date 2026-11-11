@@ -45,7 +45,7 @@ export default function App() {
   const [songs, setSongs] = useState([]);
   const [appSettings, setAppSettings] = useState({
     masterPassword: DEFAULT_MASTER_PASSWORD,
-    activeRoomId: 'roda-principal',
+    activeRoomId: null,
   });
 
   // Identifica a sala pelo link (?sala=nome-da-sala) ou usa a sala ativa do Mestre
@@ -54,16 +54,9 @@ export default function App() {
     return params.get('sala') || null;
   });
 
-  const currentRoomId = urlRoomId || appSettings.activeRoomId || 'roda-principal';
+  const currentRoomId = urlRoomId || appSettings.activeRoomId || null;
 
-  const [session, setSession] = useState({
-    id: currentRoomId,
-    roomName: 'Resenha Musical dos Amigos',
-    currentSongId: null,
-    transpose: 0,
-    queue: [],
-    history: [],
-  });
+  const [session, setSession] = useState(null);
 
   // Estado de autenticação do Mestre (persiste no navegador do Mestre)
   const [isMaster, setIsMaster] = useState(() => {
@@ -117,26 +110,34 @@ export default function App() {
   useEffect(() => {
     const unsubSession = subscribeToSession((sess) => {
       setSession(sess);
+      if (!sess && urlRoomId) {
+        setUrlRoomId(null);
+        window.history.replaceState({}, '', window.location.pathname);
+      }
     }, currentRoomId);
 
     return () => {
       unsubSession?.();
     };
-  }, [currentRoomId]);
+  }, [currentRoomId, urlRoomId]);
 
-  const effectiveSongId = syncRoom
-    ? session.currentSongId || songs[0]?.id
-    : localSongId || session.currentSongId || songs[0]?.id;
+  const hasActiveRoom = Boolean(currentRoomId && session);
 
-  const effectiveTranspose = syncRoom
-    ? session.transpose || 0
-    : localTranspose;
+  const effectiveSongId =
+    syncRoom && hasActiveRoom
+      ? session?.currentSongId || localSongId || songs[0]?.id
+      : localSongId || session?.currentSongId || songs[0]?.id;
+
+  const effectiveTranspose =
+    syncRoom && hasActiveRoom
+      ? session?.transpose || 0
+      : localTranspose;
 
   const currentSong = useMemo(() => {
     return songs.find((s) => s.id === effectiveSongId) || songs[0] || null;
   }, [songs, effectiveSongId]);
 
-  const nextQueueItem = session.queue?.[0] || null;
+  const nextQueueItem = session?.queue?.[0] || null;
   const nextSongObj = useMemo(() => {
     if (!nextQueueItem) return null;
     return songs.find((s) => s.id === nextQueueItem.songId) || null;
@@ -173,22 +174,20 @@ export default function App() {
     showToast(`Sala "${roomName}" ativa e pronta para compartilhar!`);
   };
 
-  // Excluir uma sala específica (Mestre)
+  // Excluir uma sala específica (Mestre) - inclusive a última sala existente
   const handleDeleteRoom = async (targetRoomId, targetRoomName) => {
+    const nextRoom = await deleteRoom(targetRoomId);
     if (targetRoomId === currentRoomId) {
-      if (targetRoomId === 'roda-principal') {
-        await clearRoomQueueAndHistory('roda-principal');
-        await updateLiveSession(
-          { roomName: 'Resenha Musical dos Amigos' },
-          'roda-principal'
-        );
-        showToast('Roda Principal reiniciada e limpa!');
-        return;
+      if (nextRoom && nextRoom.id) {
+        setUrlRoomId(nextRoom.id);
+        const newUrl = `${window.location.pathname}?sala=${encodeURIComponent(nextRoom.id)}`;
+        window.history.replaceState({}, '', newUrl);
+      } else {
+        setUrlRoomId(null);
+        setSession(null);
+        window.history.replaceState({}, '', window.location.pathname);
       }
-      // Alterna primeiro para a Roda Principal antes de apagar a sala antiga
-      await handleCreateOrSwitchRoom('Resenha Musical dos Amigos');
     }
-    await deleteRoom(targetRoomId);
     showToast(`Sala "${targetRoomName || targetRoomId}" apagada com sucesso!`);
   };
 
@@ -204,27 +203,26 @@ export default function App() {
 
   // Limpar fila e histórico da sala ativa (Mestre)
   const handleClearCurrentRoom = async () => {
+    if (!currentRoomId) return;
     await clearRoomQueueAndHistory(currentRoomId);
-    showToast(`Fila e histórico da sala "${session.roomName}" zerados!`);
+    showToast(`Fila e histórico da sala "${session?.roomName || currentRoomId}" zerados!`);
   };
 
   // Selecionar música (Mestre)
   const handleSelectSong = async (songId) => {
-    if (syncRoom) {
+    setLocalSongId(songId);
+    setLocalTranspose(0);
+    if (syncRoom && currentRoomId) {
       await updateLiveSession({ currentSongId: songId, transpose: 0 }, currentRoomId);
-    } else {
-      setLocalSongId(songId);
-      setLocalTranspose(0);
     }
     setActiveTab('viewer');
   };
 
   // Alterar tom (+1 / -1 semitom)
   const handleTransposeChange = async (newTranspose) => {
-    if (syncRoom) {
+    setLocalTranspose(newTranspose);
+    if (syncRoom && currentRoomId) {
       await updateLiveSession({ transpose: newTranspose }, currentRoomId);
-    } else {
-      setLocalTranspose(newTranspose);
     }
   };
 
@@ -268,7 +266,8 @@ export default function App() {
 
   // Remover item da fila (Mestre)
   const handleRemoveFromQueue = async (queueId) => {
-    const updatedQueue = (session.queue || []).filter(
+    if (!currentRoomId) return;
+    const updatedQueue = (session?.queue || []).filter(
       (item) => item.queueId !== queueId
     );
     await updateLiveSession({ queue: updatedQueue }, currentRoomId);
@@ -276,7 +275,7 @@ export default function App() {
 
   // Tocar item da fila imediatamente e registrar a anterior como tocada
   const handlePlayFromQueue = async (queueItem) => {
-    const updatedQueue = (session.queue || []).filter(
+    const updatedQueue = (session?.queue || []).filter(
       (item) => item.queueId !== queueItem.queueId
     );
     if (currentSong) {
@@ -288,14 +287,19 @@ export default function App() {
         currentRoomId
       );
     }
-    await updateLiveSession(
-      {
-        currentSongId: queueItem.songId,
-        transpose: 0,
-        queue: updatedQueue,
-      },
-      currentRoomId
-    );
+    if (currentRoomId) {
+      await updateLiveSession(
+        {
+          currentSongId: queueItem.songId,
+          transpose: 0,
+          queue: updatedQueue,
+        },
+        currentRoomId
+      );
+    } else {
+      setLocalSongId(queueItem.songId);
+      setLocalTranspose(0);
+    }
     setActiveTab('viewer');
   };
 
@@ -361,7 +365,11 @@ export default function App() {
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
                   <span className="font-extrabold text-sm sm:text-lg tracking-tight text-white truncate">
-                    {session.roomName || 'Resenha Musical'}
+                    {hasActiveRoom
+                      ? session?.roomName || 'Resenha Musical'
+                      : isMaster
+                      ? 'Resenha Musical (Sem Sala Ativa)'
+                      : 'Resenha Musical'}
                   </span>
                   <span
                     title={
@@ -388,8 +396,12 @@ export default function App() {
                 </div>
                 <p className="text-[11px] text-zinc-400 truncate">
                   {isMaster
-                    ? 'Painel Mestre Ativo'
-                    : 'Resenha Musical • Sincronizado em Tempo Real'}
+                    ? hasActiveRoom
+                      ? 'Painel Mestre Ativo'
+                      : 'Painel Mestre • Clique em "Sala" para criar uma roda'
+                    : hasActiveRoom
+                    ? 'Resenha Musical • Sincronizado em Tempo Real'
+                    : 'Aguardando o Anfitrião abrir a sala'}
                 </p>
               </div>
             </div>
@@ -468,7 +480,7 @@ export default function App() {
               >
                 <Disc3 className="w-3.5 h-3.5 shrink-0" />
                 <span>Ranking</span>
-                {(session.queue?.length || 0) + (session.suggestions?.length || 0) > 0 && (
+                {(session?.queue?.length || 0) + (session?.suggestions?.length || 0) > 0 && (
                   <span
                     className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
                       activeTab === 'jukebox'
@@ -476,7 +488,7 @@ export default function App() {
                         : 'bg-amber-500 text-zinc-950'
                     }`}
                   >
-                    {(session.queue?.length || 0) + (session.suggestions?.length || 0)}
+                    {(session?.queue?.length || 0) + (session?.suggestions?.length || 0)}
                   </span>
                 )}
               </button>
@@ -543,14 +555,16 @@ export default function App() {
         {!isMaster ? (
           /* VISÃO INTUITIVA PARA OS AMIGOS / CONVIDADOS DA SALA */
           <GuestRoomView
-            roomName={session.roomName}
+            hasActiveRoom={hasActiveRoom}
+            roomName={session?.roomName}
             songs={songs}
             currentSong={currentSong}
             transpose={effectiveTranspose}
-            queue={session.queue || []}
-            suggestions={session.suggestions || []}
+            queue={session?.queue || []}
+            suggestions={session?.suggestions || []}
             onVoteSong={handleVoteOrAddSong}
             onSuggestSong={handleSuggestSong}
+            onOpenMasterLogin={() => setIsMasterModalOpen(true)}
           />
         ) : (
           /* VISÃO COMPLETA DO MESTRE */
@@ -566,7 +580,7 @@ export default function App() {
                   setEditingSong(song);
                   setIsModalOpen(true);
                 }}
-                queueCount={session.queue?.length || 0}
+                queueCount={session?.queue?.length || 0}
                 nextSongTitle={nextSongObj?.title}
                 syncRoom={syncRoom}
                 onToggleSyncRoom={() => {
@@ -598,10 +612,10 @@ export default function App() {
             {activeTab === 'jukebox' && (
               <JukeboxView
                 roomId={currentRoomId}
-                roomName={session.roomName}
+                roomName={session?.roomName || 'Nenhuma Sala Ativa'}
                 songs={songs}
-                queue={session.queue || []}
-                suggestions={session.suggestions || []}
+                queue={session?.queue || []}
+                suggestions={session?.suggestions || []}
                 currentSong={currentSong}
                 onPlayFromQueue={handlePlayFromQueue}
                 onRemoveFromQueue={handleRemoveFromQueue}
@@ -615,7 +629,7 @@ export default function App() {
             {activeTab === 'history' && (
               <HistoryView
                 songs={songs}
-                history={session.history || []}
+                history={session?.history || []}
                 onSelectSong={handleSelectSong}
               />
             )}
@@ -640,8 +654,8 @@ export default function App() {
         onUnlockMaster={handleUnlockMaster}
         onLockMaster={handleLockMaster}
         onChangePassword={handleChangeMasterPassword}
-        currentRoomId={currentRoomId}
-        currentRoomName={session.roomName}
+        currentRoomId={hasActiveRoom ? currentRoomId : null}
+        currentRoomName={hasActiveRoom ? session?.roomName : ''}
         onCreateOrSwitchRoom={handleCreateOrSwitchRoom}
         onDeleteRoom={handleDeleteRoom}
         onDeleteOldRooms={handleDeleteOldRooms}

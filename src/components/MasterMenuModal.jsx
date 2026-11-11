@@ -61,11 +61,10 @@ export default function MasterMenuModal({
 
   if (!isOpen) return null;
 
-  const savedRooms =
-    roomsList.length > 0
-      ? roomsList
-      : [{ id: currentRoomId, roomName: currentRoomName || 'Resenha Musical' }];
-  const oldRoomsCount = savedRooms.filter((r) => r.id !== currentRoomId).length;
+  const savedRooms = roomsList;
+  const oldRoomsCount = currentRoomId
+    ? savedRooms.filter((r) => r.id !== currentRoomId).length
+    : savedRooms.length;
 
   const roomShareUrl =
     typeof window !== 'undefined'
@@ -289,135 +288,139 @@ export default function MasterMenuModal({
                 </div>
 
                 <div className="space-y-1.5 max-h-44 overflow-y-auto pr-1">
-                  {savedRooms.map((r) => {
-                    const isCurrent = r.id === currentRoomId;
-                    return (
-                      <div
-                        key={r.id}
-                        className={`flex items-center justify-between gap-2 px-3 py-2 rounded-xl border text-xs transition ${
-                          isCurrent
-                            ? 'bg-amber-500/15 border-amber-500/50 text-amber-300'
-                            : 'bg-zinc-900 border-zinc-800 text-zinc-300 hover:border-zinc-700'
-                        }`}
-                      >
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setNewRoomName(r.roomName);
-                            onCreateOrSwitchRoom(r.roomName);
-                          }}
-                          className="flex items-center gap-2 min-w-0 flex-1 text-left cursor-pointer"
-                        >
-                          <Radio
-                            className={`w-3.5 h-3.5 shrink-0 ${
-                              isCurrent ? 'text-amber-400' : 'text-zinc-500'
-                            }`}
-                          />
-                          <span className="font-bold truncate">{r.roomName}</span>
-                          {isCurrent && (
-                            <span className="px-1.5 py-0.5 rounded bg-amber-500 text-zinc-950 text-[10px] font-extrabold uppercase shrink-0">
-                              Ativa
-                            </span>
-                          )}
-                        </button>
-
-                        <button
-                          type="button"
-                          title={
+                  {savedRooms.length === 0 ? (
+                    <div className="text-center py-4 bg-zinc-900/60 border border-dashed border-zinc-800 rounded-xl text-xs text-zinc-400">
+                      Nenhuma sala ativa no momento. Digite um nome acima e clique em <strong>Ativar Sala</strong> para iniciar a resenha!
+                    </div>
+                  ) : (
+                    savedRooms.map((r) => {
+                      const isCurrent = r.id === currentRoomId;
+                      return (
+                        <div
+                          key={r.id}
+                          className={`flex items-center justify-between gap-2 px-3 py-2 rounded-xl border text-xs transition ${
                             isCurrent
-                              ? 'Apagar esta sala e voltar para a Roda Principal'
-                              : `Apagar sala "${r.roomName}"`
-                          }
-                          onClick={async () => {
-                            const msg = isCurrent
-                              ? `Deseja apagar a sala atual "${r.roomName}" e voltar para a Roda Principal?`
-                              : `Deseja apagar permanentemente a sala antiga "${r.roomName}"?`;
-                            if (!window.confirm(msg)) return;
-                            await onDeleteRoom?.(r.id, r.roomName);
-                          }}
-                          className="p-1.5 rounded-lg text-zinc-400 hover:text-red-400 hover:bg-red-500/15 transition cursor-pointer shrink-0"
+                              ? 'bg-amber-500/15 border-amber-500/50 text-amber-300'
+                              : 'bg-zinc-900 border-zinc-800 text-zinc-300 hover:border-zinc-700'
+                          }`}
                         >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    );
-                  })}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setNewRoomName(r.roomName);
+                              onCreateOrSwitchRoom(r.roomName);
+                            }}
+                            className="flex items-center gap-2 min-w-0 flex-1 text-left cursor-pointer"
+                          >
+                            <Radio
+                              className={`w-3.5 h-3.5 shrink-0 ${
+                                isCurrent ? 'text-amber-400' : 'text-zinc-500'
+                              }`}
+                            />
+                            <span className="font-bold truncate">{r.roomName}</span>
+                            {isCurrent && (
+                              <span className="px-1.5 py-0.5 rounded bg-amber-500 text-zinc-950 text-[10px] font-extrabold uppercase shrink-0">
+                                Ativa
+                              </span>
+                            )}
+                          </button>
+
+                          <button
+                            type="button"
+                            title={`Apagar sala "${r.roomName}"`}
+                            onClick={async () => {
+                              const msg = `Deseja apagar permanentemente a sala "${r.roomName}"?`;
+                              if (!window.confirm(msg)) return;
+                              await onDeleteRoom?.(r.id, r.roomName);
+                            }}
+                            className="p-1.5 rounded-lg text-zinc-400 hover:text-red-400 hover:bg-red-500/15 transition cursor-pointer shrink-0"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      );
+                    })
+                  )}
                 </div>
 
                 {/* Comandos Rápidos do Mestre para Limpeza */}
-                <div className="pt-2 flex flex-wrap items-center justify-between gap-2">
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      if (
-                        !window.confirm(
-                          `Deseja zerar a fila de votação e o histórico da sala "${currentRoomName}"?`
-                        )
-                      ) {
-                        return;
-                      }
-                      await onClearCurrentRoom?.();
-                    }}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-zinc-300 text-xs font-semibold transition cursor-pointer"
-                  >
-                    <RotateCcw className="w-3.5 h-3.5 text-amber-400" />
-                    <span>Zerar Fila e Histórico da Sala Atual</span>
-                  </button>
-                </div>
+                {currentRoomId && (
+                  <div className="pt-2 flex flex-wrap items-center justify-between gap-2">
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        if (
+                          !window.confirm(
+                            `Deseja zerar a fila de votação e o histórico da sala "${currentRoomName}"?`
+                          )
+                        ) {
+                          return;
+                        }
+                        await onClearCurrentRoom?.();
+                      }}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-zinc-300 text-xs font-semibold transition cursor-pointer"
+                    >
+                      <RotateCcw className="w-3.5 h-3.5 text-amber-400" />
+                      <span>Zerar Fila e Histórico da Sala Atual</span>
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
 
             {/* 2. Link de Atalho e QR Code para Enviar aos Amigos */}
-            <div className="bg-zinc-950/80 border border-zinc-800 rounded-2xl p-4 flex flex-col items-center text-center space-y-3">
-              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/15 text-emerald-400 text-xs font-bold">
-                <Radio className="w-3.5 h-3.5" /> Sala Ativa: {currentRoomName}
+            {currentRoomId && (
+              <div className="bg-zinc-950/80 border border-zinc-800 rounded-2xl p-4 flex flex-col items-center text-center space-y-3">
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/15 text-emerald-400 text-xs font-bold">
+                  <Radio className="w-3.5 h-3.5" /> Sala Ativa: {currentRoomName}
+                </div>
+
+                <p className="text-xs text-zinc-300">
+                  Envie este link para os seus amigos! Quem entrar por ele cai direto no menu simplificado da sala{' '}
+                  <strong className="text-white">{currentRoomName}</strong> (sem precisar de senha):
+                </p>
+
+                <div className="bg-white p-3 rounded-2xl shadow-lg">
+                  <QRCodeSVG
+                    value={roomShareUrl}
+                    size={150}
+                    bgColor="#ffffff"
+                    fgColor="#09090b"
+                    level="M"
+                  />
+                </div>
+
+                <div className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-xs font-mono text-amber-300 truncate">
+                  {roomShareUrl}
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 w-full pt-1">
+                  <button
+                    type="button"
+                    onClick={handleCopyLink}
+                    className="flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white text-xs font-bold transition cursor-pointer"
+                  >
+                    {copied ? (
+                      <>
+                        <Check className="w-4 h-4 text-emerald-400" /> Atalho Copiado!
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-4 h-4" /> Copiar Atalho
+                      </>
+                    )}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleShareWhatsApp}
+                    className="flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-zinc-950 text-xs font-extrabold transition cursor-pointer"
+                  >
+                    <Share2 className="w-4 h-4" /> Enviar no WhatsApp
+                  </button>
+                </div>
               </div>
-
-              <p className="text-xs text-zinc-300">
-                Envie este link para os seus amigos! Quem entrar por ele cai direto no menu simplificado da sala{' '}
-                <strong className="text-white">{currentRoomName}</strong> (sem precisar de senha):
-              </p>
-
-              <div className="bg-white p-3 rounded-2xl shadow-lg">
-                <QRCodeSVG
-                  value={roomShareUrl}
-                  size={150}
-                  bgColor="#ffffff"
-                  fgColor="#09090b"
-                  level="M"
-                />
-              </div>
-
-              <div className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-xs font-mono text-amber-300 truncate">
-                {roomShareUrl}
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 w-full pt-1">
-                <button
-                  type="button"
-                  onClick={handleCopyLink}
-                  className="flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white text-xs font-bold transition cursor-pointer"
-                >
-                  {copied ? (
-                    <>
-                      <Check className="w-4 h-4 text-emerald-400" /> Atalho Copiado!
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="w-4 h-4" /> Copiar Atalho
-                    </>
-                  )}
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handleShareWhatsApp}
-                  className="flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-zinc-950 text-xs font-extrabold transition cursor-pointer"
-                >
-                  <Share2 className="w-4 h-4" /> Enviar no WhatsApp
-                </button>
-              </div>
-            </div>
+            )}
 
             {/* 3. Alterar Senha Mestre ou Sair do Modo Mestre */}
             <div className="border-t border-zinc-800 pt-4 space-y-3">

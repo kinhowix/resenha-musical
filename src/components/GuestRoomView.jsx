@@ -27,6 +27,7 @@ const VOTER_NAME_KEY = 'resenha_guest_name_v1';
 const VOTED_SONGS_SESSION_KEY = 'resenha_voted_songs_v1';
 
 export default function GuestRoomView({
+  hasActiveRoom = true,
   roomName,
   songs = [],
   currentSong,
@@ -35,6 +36,7 @@ export default function GuestRoomView({
   suggestions = [],
   onVoteSong,
   onSuggestSong,
+  onOpenMasterLogin,
 }) {
   // Aba super simples: 'choose' (Escolher Música & Ranking) ou 'lyrics' (Ver Música Tocando Agora)
   const [guestSection, setGuestSection] = useState('choose');
@@ -131,6 +133,40 @@ export default function GuestRoomView({
         (s.rhythm && s.rhythm.toLowerCase().includes(search.toLowerCase()))
     );
   }, [songs, search]);
+
+  if (!hasActiveRoom) {
+    return (
+      <div className="max-w-xl mx-auto my-12 bg-gradient-to-br from-amber-500/15 via-zinc-900 to-zinc-900 border border-amber-500/30 rounded-3xl p-8 text-center shadow-2xl space-y-5">
+        <div className="w-16 h-16 mx-auto rounded-2xl bg-amber-500 text-zinc-950 flex items-center justify-center shadow-lg shadow-amber-500/20">
+          <Guitar className="w-9 h-9 stroke-[2.2]" />
+        </div>
+
+        <div className="space-y-2">
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/20 text-amber-300 text-xs font-extrabold uppercase tracking-wider">
+            Aguardando Início
+          </span>
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-white">
+            A Resenha ainda não começou!
+          </h1>
+          <p className="text-sm text-zinc-300 leading-relaxed">
+            Nenhuma sala está aberta neste momento. Assim que o anfitrião criar a sala do encontro de hoje, esta tela abrirá automaticamente!
+          </p>
+        </div>
+
+        {onOpenMasterLogin && (
+          <div className="pt-3 border-t border-zinc-800/80">
+            <button
+              type="button"
+              onClick={onOpenMasterLogin}
+              className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-2xl bg-zinc-800 hover:bg-zinc-700 text-amber-400 text-xs sm:text-sm font-extrabold transition cursor-pointer"
+            >
+              Sou o Anfitrião (Criar Sala com Senha Mestre)
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 pb-32">

@@ -118,18 +118,19 @@ function getLocalSettings() {
     if (!raw) {
       return {
         masterPassword: DEFAULT_MASTER_PASSWORD,
-        activeRoomId: 'roda-principal',
+        activeRoomId: null,
       };
     }
+    const parsed = JSON.parse(raw);
     return {
-      masterPassword: DEFAULT_MASTER_PASSWORD,
-      activeRoomId: 'roda-principal',
-      ...JSON.parse(raw),
+      masterPassword: parsed.masterPassword || DEFAULT_MASTER_PASSWORD,
+      activeRoomId:
+        parsed.activeRoomId !== undefined ? parsed.activeRoomId : null,
     };
   } catch {
     return {
       masterPassword: DEFAULT_MASTER_PASSWORD,
-      activeRoomId: 'roda-principal',
+      activeRoomId: null,
     };
   }
 }
@@ -170,7 +171,8 @@ export function subscribeToAppSettings(callback) {
         const data = docSnap.data();
         const merged = {
           masterPassword: data.masterPassword || DEFAULT_MASTER_PASSWORD,
-          activeRoomId: data.activeRoomId || 'roda-principal',
+          activeRoomId:
+            data.activeRoomId !== undefined ? data.activeRoomId : null,
         };
         localStorage.setItem(LOCAL_SETTINGS_KEY, JSON.stringify(merged));
         callback(merged);
@@ -426,29 +428,35 @@ function notifyLocalSession(roomId) {
   }
 }
 
-export function subscribeToSession(callback, roomId = 'roda-principal') {
+export function subscribeToSession(callback, roomId) {
+  if (!roomId) {
+    callback(null);
+    return () => {};
+  }
+
   if (!localListeners.sessions.has(roomId)) {
     localListeners.sessions.set(roomId, new Set());
   }
   const roomSet = localListeners.sessions.get(roomId);
   roomSet.add(callback);
-  callback(getLocalSession(roomId));
+
+  // Só entrega sessão local imediatamente se ela já existir salva localmente
+  const existingLocalRaw = localStorage.getItem(LOCAL_SESSION_PREFIX + roomId);
+  if (existingLocalRaw) {
+    callback(getLocalSession(roomId));
+  }
 
   let unsubFirestore = null;
   if (db) {
     const sessionRef = doc(db, 'sessions', roomId);
     unsubFirestore = onSnapshot(
       sessionRef,
-      async (docSnap) => {
+      (docSnap) => {
         updateConnectionStatus('cloud', null);
         if (!docSnap.exists()) {
-          const initial = getLocalSession(roomId);
-          try {
-            await withTimeout(setDoc(sessionRef, initial), 3000);
-          } catch (err) {
-            updateConnectionStatus('local', err.code || err.message);
-          }
-          callback(initial);
+          // Se a sala foi apagada no Firestore, remove do cache local também e avisa que não existe!
+          localStorage.removeItem(LOCAL_SESSION_PREFIX + roomId);
+          callback(null);
           return;
         }
         const cloudData = docSnap.data();
@@ -467,9 +475,12 @@ export function subscribeToSession(callback, roomId = 'roda-principal') {
       (error) => {
         console.warn('Firestore aviso (session):', error.code || error.message);
         updateConnectionStatus('local', error.code || error.message);
-        callback(getLocalSession(roomId));
+        const raw = localStorage.getItem(LOCAL_SESSION_PREFIX + roomId);
+        callback(raw ? getLocalSession(roomId) : null);
       }
     );
+  } else if (!existingLocalRaw) {
+    callback(null);
   }
 
   return () => {
@@ -478,7 +489,8 @@ export function subscribeToSession(callback, roomId = 'roda-principal') {
   };
 }
 
-export async function updateLiveSession(partialSession, roomId = 'roda-principal') {
+export async function updateLiveSession(partialSession, roomId) {
+  if (!roomId) return null;
   const updated = saveLocalSession(partialSession, roomId);
 
   if (db) {
@@ -617,13 +629,9 @@ export function getSavedRoomsList() {
       }
     }
 
-    if (map.size === 0) {
-      return [{ id: 'roda-principal', roomName: 'Resenha Musical dos Amigos' }];
-    }
-
     return Array.from(map.values());
   } catch {
-    return [{ id: 'roda-principal', roomName: 'Resenha Musical dos Amigos' }];
+    return [];
   }
 }
 
@@ -650,12 +658,8 @@ export function subscribeToRooms(callback) {
           };
         });
 
-        if (cloudRooms.length > 0) {
-          localStorage.setItem(LOCAL_ROOMS_LIST_KEY, JSON.stringify(cloudRooms));
-          callback(cloudRooms);
-        } else {
-          callback(getSavedRoomsList());
-        }
+        localStorage.setItem(LOCAL_ROOMS_LIST_KEY, JSON.stringify(cloudRooms));
+        callback(cloudRooms);
       },
       () => {
         callback(getSavedRoomsList());
@@ -671,19 +675,24 @@ export function subscribeToRooms(callback) {
 
 /**
  * Exclui uma sala específica (do Firestore e do navegador local)
+ * e retorna a próxima sala disponível (ou null se todas foram apagadas)
  */
 export async function deleteRoom(roomId) {
-  if (!roomId) return;
+  if (!roomId) return null;
 
   // Remove do localStorage
+  let remainingRooms = [];
   try {
     localStorage.removeItem(LOCAL_SESSION_PREFIX + roomId);
     const raw = localStorage.getItem(LOCAL_ROOMS_LIST_KEY);
     if (raw) {
       const list = JSON.parse(raw);
       if (Array.isArray(list)) {
-        const filtered = list.filter((r) => r.id !== roomId);
-        localStorage.setItem(LOCAL_ROOMS_LIST_KEY, JSON.stringify(filtered));
+        remainingRooms = list.filter((r) => r.id !== roomId);
+        localStorage.setItem(
+          LOCAL_ROOMS_LIST_KEY,
+          JSON.stringify(remainingRooms)
+        );
       }
     }
   } catch {
@@ -699,14 +708,38 @@ export async function deleteRoom(roomId) {
     }
   }
 
+  // Se a sala apagada era a sala ativa global, atualiza activeRoomId para a próxima sala ou null
+  const currentSettings = getLocalSettings();
+  const nextActiveId =
+    remainingRooms.length > 0 ? remainingRooms[0].id : null;
+
+  if (currentSettings.activeRoomId === roomId) {
+    saveLocalSettings({ activeRoomId: nextActiveId });
+    if (db) {
+      try {
+        await withTimeout(
+          setDoc(
+            doc(db, 'settings', 'global'),
+            { activeRoomId: nextActiveId },
+            { merge: true }
+          ),
+          3000
+        );
+      } catch {
+        // ignore
+      }
+    }
+  }
+
   notifyLocalRooms();
   broadcastChannel?.postMessage({ type: 'ROOMS_UPDATED' });
+  return remainingRooms[0] || null;
 }
 
 /**
  * Apaga TODAS as salas antigas, mantendo apenas a sala ativa atual (`keepRoomId`)
  */
-export async function deleteOldRooms(keepRoomId = 'roda-principal') {
+export async function deleteOldRooms(keepRoomId) {
   const idsToDelete = new Set();
 
   // Coleta salas locais
@@ -754,17 +787,21 @@ export async function deleteOldRooms(keepRoomId = 'roda-principal') {
     }
   }
 
-  // Mantém apenas a sala atual na lista local
+  // Mantém apenas a sala atual na lista local (se houver)
   try {
-    const currentSess = getLocalSession(keepRoomId);
-    const remaining = [
-      {
-        id: keepRoomId,
-        roomName: currentSess.roomName || keepRoomId,
-        updatedAt: new Date().toISOString(),
-      },
-    ];
-    localStorage.setItem(LOCAL_ROOMS_LIST_KEY, JSON.stringify(remaining));
+    if (keepRoomId) {
+      const currentSess = getLocalSession(keepRoomId);
+      const remaining = [
+        {
+          id: keepRoomId,
+          roomName: currentSess.roomName || keepRoomId,
+          updatedAt: new Date().toISOString(),
+        },
+      ];
+      localStorage.setItem(LOCAL_ROOMS_LIST_KEY, JSON.stringify(remaining));
+    } else {
+      localStorage.setItem(LOCAL_ROOMS_LIST_KEY, JSON.stringify([]));
+    }
   } catch {
     // ignore
   }
@@ -777,7 +814,8 @@ export async function deleteOldRooms(keepRoomId = 'roda-principal') {
 /**
  * Limpa a fila de votação e o histórico da sala ativa (Reiniciar Sala)
  */
-export async function clearRoomQueueAndHistory(roomId = 'roda-principal') {
+export async function clearRoomQueueAndHistory(roomId) {
+  if (!roomId) return null;
   return await updateLiveSession({ queue: [], history: [] }, roomId);
 }
 
@@ -787,8 +825,9 @@ export async function clearRoomQueueAndHistory(roomId = 'roda-principal') {
 export async function addSongSuggestion(
   { title, artist = '', suggestedBy = 'Amigo da Roda' },
   currentSession,
-  roomId = 'roda-principal'
+  roomId
 ) {
+  if (!roomId) return [];
   const cleanTitle = (title || '').trim();
   if (!cleanTitle) return [];
 
@@ -829,8 +868,9 @@ export async function addSongSuggestion(
 export async function removeSongSuggestion(
   suggestionId,
   currentSession,
-  roomId = 'roda-principal'
+  roomId
 ) {
+  if (!roomId) return [];
   const currentList = Array.isArray(currentSession?.suggestions)
     ? currentSession.suggestions
     : [];
@@ -842,7 +882,8 @@ export async function removeSongSuggestion(
 /**
  * Mestre limpa todas as sugestões da sala
  */
-export async function clearRoomSuggestions(roomId = 'roda-principal') {
+export async function clearRoomSuggestions(roomId) {
+  if (!roomId) return;
   await updateLiveSession({ suggestions: [] }, roomId);
 }
 
@@ -855,8 +896,9 @@ export async function voteOrAddSongToQueue(
   songId,
   voterName = 'Amigo da Roda',
   currentSession,
-  roomId = 'roda-principal'
+  roomId
 ) {
+  if (!roomId) return [];
   const cleanVoter = voterName.trim() || 'Amigo da Roda';
   let baseQueue = [...(currentSession?.queue || [])];
 
@@ -913,7 +955,7 @@ export async function registerSongPlayed(
   nextSongId,
   nextTranspose = 0,
   currentSession,
-  roomId = 'roda-principal'
+  roomId
 ) {
   const now = new Date().toISOString();
   const newHistoryEntry = {
@@ -949,12 +991,14 @@ export async function registerSongPlayed(
     }
   }
 
-  await updateLiveSession(
-    {
-      currentSongId: nextSongId,
-      transpose: nextTranspose,
-      history: updatedHistory,
-    },
-    roomId
-  );
+  if (roomId) {
+    await updateLiveSession(
+      {
+        currentSongId: nextSongId,
+        transpose: nextTranspose,
+        history: updatedHistory,
+      },
+      roomId
+    );
+  }
 }
