@@ -199,3 +199,4 @@ export default function ChordDiagram({ chord, size = 'md' }) {
     </div>
   );
 }
+
