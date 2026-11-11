@@ -27,6 +27,9 @@ import {
   deleteOldRooms,
   clearRoomQueueAndHistory,
   voteOrAddSongToQueue,
+  addSongSuggestion,
+  removeSongSuggestion,
+  clearRoomSuggestions,
 } from './services/hybridStore';
 import ChordViewer from './components/ChordViewer';
 import SongListView from './components/SongListView';
@@ -232,6 +235,37 @@ export default function App() {
     showToast(`+1 ponto para "${songTitle}" no ranking da fila!`);
   };
 
+  // Convidado envia uma sugestão de música nova
+  const handleSuggestSong = async (suggestionData) => {
+    await addSongSuggestion(suggestionData, session, currentRoomId);
+    showToast(`Sugestão "${suggestionData.title}" enviada para o Mestre!`);
+  };
+
+  // Mestre remove uma sugestão individual
+  const handleRemoveSuggestion = async (suggestionId) => {
+    await removeSongSuggestion(suggestionId, session, currentRoomId);
+    showToast('Sugestão removida.');
+  };
+
+  // Mestre limpa todas as sugestões da sala
+  const handleClearSuggestions = async () => {
+    await clearRoomSuggestions(currentRoomId);
+    showToast('Lista de sugestões limpa!');
+  };
+
+  // Mestre abre o modal de Nova Cifra já preenchido com a sugestão do amigo
+  const handleImportSuggestion = (sug) => {
+    setEditingSong({
+      title: sug.title || '',
+      artist: sug.artist || '',
+      originalKey: 'G',
+      rhythm: '',
+      content: '',
+      fromSuggestionId: sug.suggestionId,
+    });
+    setIsModalOpen(true);
+  };
+
   // Remover item da fila (Mestre)
   const handleRemoveFromQueue = async (queueId) => {
     const updatedQueue = (session.queue || []).filter(
@@ -286,8 +320,15 @@ export default function App() {
   // Salvar (Criar ou Atualizar) música
   const handleSaveSong = async (songData) => {
     const isEditing = Boolean(songData.id);
-    const saved = await saveSong(songData);
+    const fromSuggestionId = songData.fromSuggestionId || editingSong?.fromSuggestionId;
+    const cleanData = { ...songData };
+    delete cleanData.fromSuggestionId;
+
+    const saved = await saveSong(cleanData);
     showToast(`"${saved.title}" salva no repertório!`);
+    if (fromSuggestionId) {
+      await removeSongSuggestion(fromSuggestionId, session, currentRoomId);
+    }
     if (!isEditing) {
       await updateLiveSession({ currentSongId: saved.id, transpose: 0 }, currentRoomId);
     }
@@ -427,7 +468,7 @@ export default function App() {
               >
                 <Disc3 className="w-3.5 h-3.5 shrink-0" />
                 <span>Ranking</span>
-                {session.queue?.length > 0 && (
+                {(session.queue?.length || 0) + (session.suggestions?.length || 0) > 0 && (
                   <span
                     className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
                       activeTab === 'jukebox'
@@ -435,7 +476,7 @@ export default function App() {
                         : 'bg-amber-500 text-zinc-950'
                     }`}
                   >
-                    {session.queue.length}
+                    {(session.queue?.length || 0) + (session.suggestions?.length || 0)}
                   </span>
                 )}
               </button>
@@ -507,7 +548,9 @@ export default function App() {
             currentSong={currentSong}
             transpose={effectiveTranspose}
             queue={session.queue || []}
+            suggestions={session.suggestions || []}
             onVoteSong={handleVoteOrAddSong}
+            onSuggestSong={handleSuggestSong}
           />
         ) : (
           /* VISÃO COMPLETA DO MESTRE */
@@ -558,10 +601,14 @@ export default function App() {
                 roomName={session.roomName}
                 songs={songs}
                 queue={session.queue || []}
+                suggestions={session.suggestions || []}
                 currentSong={currentSong}
                 onPlayFromQueue={handlePlayFromQueue}
                 onRemoveFromQueue={handleRemoveFromQueue}
                 onAddToQueue={handleVoteOrAddSong}
+                onRemoveSuggestion={handleRemoveSuggestion}
+                onClearSuggestions={handleClearSuggestions}
+                onImportSuggestion={handleImportSuggestion}
               />
             )}
 

@@ -10,6 +10,8 @@ import {
   Sparkles,
   Guitar,
   Mic,
+  MessageSquarePlus,
+  Send,
   X,
 } from 'lucide-react';
 import {
@@ -30,7 +32,9 @@ export default function GuestRoomView({
   currentSong,
   transpose = 0,
   queue = [],
+  suggestions = [],
   onVoteSong,
+  onSuggestSong,
 }) {
   // Aba super simples: 'choose' (Escolher Música & Ranking) ou 'lyrics' (Ver Música Tocando Agora)
   const [guestSection, setGuestSection] = useState('choose');
@@ -54,6 +58,25 @@ export default function GuestRoomView({
   const [showDiagrams, setShowDiagrams] = useState(true);
   const [lyricsOnly, setLyricsOnly] = useState(false);
   const [selectedPopupChord, setSelectedPopupChord] = useState(null);
+
+  // Campos para enviar sugestão de música nova ao Mestre
+  const [sugTitle, setSugTitle] = useState('');
+  const [sugArtist, setSugArtist] = useState('');
+  const [sugSent, setSugSent] = useState(false);
+
+  const handleSendSuggestion = (e) => {
+    e.preventDefault();
+    if (!sugTitle.trim()) return;
+    onSuggestSong?.({
+      title: sugTitle.trim(),
+      artist: sugArtist.trim(),
+      suggestedBy: guestName.trim() || 'Amigo da Roda',
+    });
+    setSugTitle('');
+    setSugArtist('');
+    setSugSent(true);
+    setTimeout(() => setSugSent(false), 3500);
+  };
 
   useEffect(() => {
     if (!isAutoScrolling || guestSection !== 'lyrics') return;
@@ -579,6 +602,85 @@ export default function GuestRoomView({
                 );
               })}
             </div>
+          </div>
+
+          {/* CAIXINHA DE SUGESTÕES PARA O MESTRE */}
+          <div className="bg-gradient-to-br from-zinc-900 via-zinc-900 to-amber-500/10 border border-amber-500/30 rounded-3xl p-5 sm:p-6 shadow-lg">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="p-2.5 rounded-2xl bg-amber-500/15 text-amber-400 shrink-0">
+                <MessageSquarePlus className="w-6 h-6" />
+              </div>
+              <div>
+                <h2 className="text-lg sm:text-xl font-extrabold text-white">
+                  Não achou sua música? Envie uma Sugestão!
+                </h2>
+                <p className="text-xs sm:text-sm text-zinc-400">
+                  Peça qualquer música para o Mestre cadastrar na roda!
+                </p>
+              </div>
+            </div>
+
+            <form
+              onSubmit={handleSendSuggestion}
+              className="grid grid-cols-1 sm:grid-cols-12 gap-3 mt-4"
+            >
+              <div className="sm:col-span-5">
+                <input
+                  type="text"
+                  required
+                  value={sugTitle}
+                  onChange={(e) => setSugTitle(e.target.value)}
+                  placeholder="Nome da música (ex: Boate Azul) *"
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-2xl px-4 py-3 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:border-amber-500"
+                />
+              </div>
+
+              <div className="sm:col-span-4">
+                <input
+                  type="text"
+                  value={sugArtist}
+                  onChange={(e) => setSugArtist(e.target.value)}
+                  placeholder="Cantor / Banda (opcional)"
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-2xl px-4 py-3 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:border-amber-500"
+                />
+              </div>
+
+              <div className="sm:col-span-3">
+                <button
+                  type="submit"
+                  className="w-full h-full flex items-center justify-center gap-2 py-3 px-4 rounded-2xl bg-amber-500 hover:bg-amber-400 active:scale-95 text-zinc-950 font-extrabold text-sm shadow-lg shadow-amber-500/20 transition cursor-pointer"
+                >
+                  <Send className="w-4 h-4" />
+                  <span>Enviar Sugestão</span>
+                </button>
+              </div>
+            </form>
+
+            {sugSent && (
+              <div className="mt-3 px-4 py-2.5 rounded-xl bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 text-xs sm:text-sm font-bold">
+                ✅ Sugestão enviada para o Mestre da Roda!
+              </div>
+            )}
+
+            {suggestions.length > 0 && (
+              <div className="mt-4 pt-4 border-t border-zinc-800/80">
+                <span className="block text-xs font-bold uppercase tracking-wider text-zinc-400 mb-2">
+                  Últimas sugestões enviadas pela galera ({suggestions.length}):
+                </span>
+                <div className="flex flex-wrap gap-2">
+                  {suggestions.slice(0, 8).map((s) => (
+                    <span
+                      key={s.suggestionId}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-zinc-300"
+                    >
+                      <strong className="text-amber-400">{s.title}</strong>
+                      {s.artist && <span>— {s.artist}</span>}
+                      <span className="text-zinc-500">({s.suggestedBy})</span>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

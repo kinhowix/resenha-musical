@@ -361,6 +361,7 @@ function getDefaultSession(roomId = 'roda-principal', roomName) {
     currentSongId: INITIAL_SONGS[0].id,
     transpose: 0,
     queue: [],
+    suggestions: [],
     history: [],
     updatedAt: new Date().toISOString(),
   };
@@ -391,6 +392,7 @@ function getLocalSession(roomId = 'roda-principal') {
       ...parsed,
       roomName: parsed.roomName || formatRoomNameFromId(roomId),
       queue: sortQueueByVotes(parsed.queue || []),
+      suggestions: Array.isArray(parsed.suggestions) ? parsed.suggestions : [],
     };
   } catch {
     return getDefaultSession(roomId);
@@ -455,6 +457,9 @@ export function subscribeToSession(callback, roomId = 'roda-principal') {
           id: roomId,
           roomName: cloudData.roomName || formatRoomNameFromId(roomId),
           queue: sortQueueByVotes(cloudData.queue || []),
+          suggestions: Array.isArray(cloudData.suggestions)
+            ? cloudData.suggestions
+            : [],
         };
         localStorage.setItem(LOCAL_SESSION_PREFIX + roomId, JSON.stringify(normalized));
         callback(normalized);
@@ -774,6 +779,71 @@ export async function deleteOldRooms(keepRoomId = 'roda-principal') {
  */
 export async function clearRoomQueueAndHistory(roomId = 'roda-principal') {
   return await updateLiveSession({ queue: [], history: [] }, roomId);
+}
+
+/**
+ * Convidado envia uma Sugestão de Música que ainda não está na lista do repertório
+ */
+export async function addSongSuggestion(
+  { title, artist = '', suggestedBy = 'Amigo da Roda' },
+  currentSession,
+  roomId = 'roda-principal'
+) {
+  const cleanTitle = (title || '').trim();
+  if (!cleanTitle) return [];
+
+  const cleanArtist = (artist || '').trim();
+  const cleanUser = (suggestedBy || '').trim() || 'Amigo da Roda';
+
+  let baseSuggestions = Array.isArray(currentSession?.suggestions)
+    ? [...currentSession.suggestions]
+    : [];
+
+  if (db) {
+    try {
+      const snap = await withTimeout(getDoc(doc(db, 'sessions', roomId)), 2500);
+      if (snap.exists() && Array.isArray(snap.data()?.suggestions)) {
+        baseSuggestions = [...snap.data().suggestions];
+      }
+    } catch {
+      // fallback
+    }
+  }
+
+  const newSuggestion = {
+    suggestionId: `sug-${Date.now()}`,
+    title: cleanTitle,
+    artist: cleanArtist,
+    suggestedBy: cleanUser,
+    createdAt: new Date().toISOString(),
+  };
+
+  const updated = [newSuggestion, ...baseSuggestions];
+  await updateLiveSession({ suggestions: updated }, roomId);
+  return updated;
+}
+
+/**
+ * Mestre remove uma sugestão específica
+ */
+export async function removeSongSuggestion(
+  suggestionId,
+  currentSession,
+  roomId = 'roda-principal'
+) {
+  const currentList = Array.isArray(currentSession?.suggestions)
+    ? currentSession.suggestions
+    : [];
+  const updated = currentList.filter((s) => s.suggestionId !== suggestionId);
+  await updateLiveSession({ suggestions: updated }, roomId);
+  return updated;
+}
+
+/**
+ * Mestre limpa todas as sugestões da sala
+ */
+export async function clearRoomSuggestions(roomId = 'roda-principal') {
+  await updateLiveSession({ suggestions: [] }, roomId);
 }
 
 /**

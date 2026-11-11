@@ -12,6 +12,8 @@ import {
   Check,
   ThumbsUp,
   Share2,
+  MessageSquarePlus,
+  Plus,
 } from 'lucide-react';
 
 export default function JukeboxView({
@@ -19,10 +21,14 @@ export default function JukeboxView({
   roomName = 'Resenha Musical',
   songs,
   queue = [],
+  suggestions = [],
   currentSong,
   onPlayFromQueue,
   onRemoveFromQueue,
   onAddToQueue,
+  onRemoveSuggestion,
+  onClearSuggestions,
+  onImportSuggestion,
 }) {
   const [selectedSongId, setSelectedSongId] = useState(songs[0]?.id || '');
   const [requesterName, setRequesterName] = useState('');
@@ -216,6 +222,90 @@ export default function JukeboxView({
                   </div>
                 );
               })}
+            </div>
+          )}
+        </div>
+
+        {/* Painel do Mestre: Sugestões de Músicas Enviadas pelos Amigos */}
+        <div className="bg-zinc-900/60 border border-zinc-800 rounded-2xl p-5">
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+            <div>
+              <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                <MessageSquarePlus className="w-5 h-5 text-amber-500" />
+                Sugestões dos Amigos ({suggestions.length})
+              </h3>
+              <p className="text-xs text-zinc-400">
+                Músicas que os convidados pediram para você cadastrar no repertório
+              </p>
+            </div>
+
+            {suggestions.length > 0 && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (
+                    window.confirm(
+                      'Deseja limpar todas as sugestões enviadas pelos amigos?'
+                    )
+                  ) {
+                    onClearSuggestions?.();
+                  }
+                }}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-500/15 hover:bg-red-500/25 border border-red-500/30 text-red-300 text-xs font-bold transition cursor-pointer"
+              >
+                <Trash2 className="w-3.5 h-3.5" /> Limpar Todas
+              </button>
+            )}
+          </div>
+
+          {suggestions.length === 0 ? (
+            <div className="text-center py-8 border border-dashed border-zinc-800 rounded-xl text-zinc-500">
+              <p className="text-sm">Nenhuma sugestão pendente.</p>
+              <p className="text-xs mt-1">
+                Quando os convidados sugerirem músicas novas na tela deles, elas aparecerão aqui!
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-2.5">
+              {suggestions.map((sug) => (
+                <div
+                  key={sug.suggestionId}
+                  className="flex items-center justify-between gap-3 bg-zinc-950/80 border border-zinc-800/90 rounded-xl p-3.5 hover:border-zinc-700 transition"
+                >
+                  <div className="min-w-0">
+                    <h4 className="font-bold text-white text-sm truncate">
+                      {sug.title}
+                    </h4>
+                    <p className="text-xs text-zinc-400 truncate">
+                      {sug.artist || 'Artista não informado'} •{' '}
+                      <span className="text-amber-400 font-medium">
+                        Sugerida por: {sug.suggestedBy || 'Amigo'}
+                      </span>
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2 shrink-0">
+                    {onImportSuggestion && (
+                      <button
+                        type="button"
+                        onClick={() => onImportSuggestion(sug)}
+                        title="Abrir tela de Nova Cifra já preenchida com esta sugestão"
+                        className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500 text-amber-300 hover:text-zinc-950 border border-amber-500/40 font-bold text-xs transition cursor-pointer"
+                      >
+                        <Plus className="w-3.5 h-3.5" /> Cadastrar Cifra
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => onRemoveSuggestion?.(sug.suggestionId)}
+                      title="Excluir esta sugestão"
+                      className="p-1.5 text-zinc-500 hover:text-red-400 hover:bg-zinc-800 rounded-lg transition cursor-pointer"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </div>
