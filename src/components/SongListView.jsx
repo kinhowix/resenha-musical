@@ -8,6 +8,7 @@ import {
   Trash2,
   Music2,
   Flame,
+  Globe,
 } from 'lucide-react';
 
 export default function SongListView({
@@ -51,9 +52,9 @@ export default function SongListView({
 
         <button
           onClick={onNewSong}
-          className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold text-sm shadow-lg shadow-amber-500/20 transition cursor-pointer shrink-0"
+          className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 font-extrabold text-sm shadow-lg shadow-amber-500/20 transition cursor-pointer shrink-0"
         >
-          <Plus className="w-4 h-4 stroke-[2.5]" /> Cadastrar Música
+          <Globe className="w-4 h-4 stroke-[2.2]" /> Buscar / Cadastrar Cifra
         </button>
       </div>
 
@@ -70,7 +71,20 @@ export default function SongListView({
       </div>
 
       {/* Grid de Músicas */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      {filteredSongs.length === 0 ? (
+        <div className="bg-zinc-900/60 border border-dashed border-zinc-800 rounded-2xl p-8 text-center space-y-3">
+          <p className="text-sm text-zinc-300 font-semibold">
+            Nenhuma música encontrada no seu repertório para &ldquo;{search}&rdquo;.
+          </p>
+          <button
+            onClick={onNewSong}
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 font-extrabold text-xs sm:text-sm shadow transition cursor-pointer"
+          >
+            <Globe className="w-4 h-4" /> Buscar e Importar da Internet Agora
+          </button>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {filteredSongs.map((song) => {
           const isPlaying = song.id === currentSongId;
           const isPromptingQueue = addingSongId === song.id;
@@ -184,7 +198,8 @@ export default function SongListView({
             </div>
           );
         })}
-      </div>
+        </div>
+      )}
     </div>
   );
 }
