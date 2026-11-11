@@ -561,6 +561,7 @@ export default function App() {
         onDeleteRoom={handleDeleteRoom}
         onDeleteOldRooms={handleDeleteOldRooms}
         onClearCurrentRoom={handleClearCurrentRoom}
+        connStatus={connStatus}
       />
 
       {/* Toast de Feedback */}

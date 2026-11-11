@@ -344,37 +344,24 @@ export function slugifyRoomId(roomName) {
   );
 }
 
-function getDefaultSession(roomId = 'roda-principal', roomName = 'Resenha Musical dos Amigos') {
+function formatRoomNameFromId(roomId = 'roda-principal') {
+  if (!roomId || roomId === 'roda-principal') return 'Resenha Musical dos Amigos';
+  return roomId
+    .split('-')
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+}
+
+function getDefaultSession(roomId = 'roda-principal', roomName) {
+  const resolvedName = roomName || formatRoomNameFromId(roomId);
   return {
     id: roomId,
-    roomName,
+    roomName: resolvedName,
     currentSongId: INITIAL_SONGS[0].id,
     transpose: 0,
-    queue: [
-      {
-        queueId: 'q-alceu-anunciacao',
-        songId: 'alceu-anunciacao',
-        votes: 3,
-        voters: ['Thiago', 'Bia', 'Carlos'],
-        requestedBy: 'Thiago',
-        addedAt: new Date(Date.now() - 60000).toISOString(),
-      },
-      {
-        queueId: 'q-tim-maia-descobridor',
-        songId: 'tim-maia-descobridor',
-        votes: 1,
-        voters: ['Mariana'],
-        requestedBy: 'Mariana',
-        addedAt: new Date().toISOString(),
-      },
-    ],
-    history: [
-      {
-        historyId: 'h-1',
-        songId: 'paralamas-meu-erro',
-        playedAt: new Date(Date.now() - 1000 * 60 * 25).toISOString(),
-      },
-    ],
+    queue: [],
+    history: [],
     updatedAt: new Date().toISOString(),
   };
 }
@@ -402,7 +389,7 @@ function getLocalSession(roomId = 'roda-principal') {
     const parsed = JSON.parse(raw);
     return {
       ...parsed,
-      roomName: parsed.roomName || 'Resenha Musical dos Amigos',
+      roomName: parsed.roomName || formatRoomNameFromId(roomId),
       queue: sortQueueByVotes(parsed.queue || []),
     };
   } catch {
@@ -451,12 +438,13 @@ export function subscribeToSession(callback, roomId = 'roda-principal') {
     unsubFirestore = onSnapshot(
       sessionRef,
       async (docSnap) => {
+        updateConnectionStatus('cloud', null);
         if (!docSnap.exists()) {
           const initial = getLocalSession(roomId);
           try {
             await withTimeout(setDoc(sessionRef, initial), 3000);
-          } catch {
-            // fallback
+          } catch (err) {
+            updateConnectionStatus('local', err.code || err.message);
           }
           callback(initial);
           return;
@@ -465,7 +453,7 @@ export function subscribeToSession(callback, roomId = 'roda-principal') {
         const normalized = {
           ...cloudData,
           id: roomId,
-          roomName: cloudData.roomName || 'Resenha Musical dos Amigos',
+          roomName: cloudData.roomName || formatRoomNameFromId(roomId),
           queue: sortQueueByVotes(cloudData.queue || []),
         };
         localStorage.setItem(LOCAL_SESSION_PREFIX + roomId, JSON.stringify(normalized));
@@ -473,6 +461,7 @@ export function subscribeToSession(callback, roomId = 'roda-principal') {
       },
       (error) => {
         console.warn('Firestore aviso (session):', error.code || error.message);
+        updateConnectionStatus('local', error.code || error.message);
         callback(getLocalSession(roomId));
       }
     );
@@ -494,8 +483,10 @@ export async function updateLiveSession(partialSession, roomId = 'roda-principal
         setDoc(sessionRef, updated, { merge: true }),
         3500
       );
+      updateConnectionStatus('cloud', null);
     } catch (err) {
       console.warn('Sessão atualizada localmente:', err.message);
+      updateConnectionStatus('local', err.code || err.message);
     }
   }
   return updated;
@@ -797,7 +788,20 @@ export async function voteOrAddSongToQueue(
   roomId = 'roda-principal'
 ) {
   const cleanVoter = voterName.trim() || 'Amigo da Roda';
-  const currentQueue = [...(currentSession?.queue || [])];
+  let baseQueue = [...(currentSession?.queue || [])];
+
+  if (db) {
+    try {
+      const snap = await withTimeout(getDoc(doc(db, 'sessions', roomId)), 2500);
+      if (snap.exists() && Array.isArray(snap.data()?.queue)) {
+        baseQueue = [...snap.data().queue];
+      }
+    } catch {
+      // usa fila local caso falhe
+    }
+  }
+
+  const currentQueue = baseQueue;
   const existingIdx = currentQueue.findIndex((item) => item.songId === songId);
 
   if (existingIdx >= 0) {
