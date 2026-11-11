@@ -235,17 +235,20 @@ export default function MasterMenuModal({
               <label className="block text-xs font-extrabold uppercase tracking-wider text-amber-400">
                 1. Criar ou Mudar Sala da Resenha
               </label>
-              <form onSubmit={handleCreateRoom} className="flex gap-2">
+              <form
+                onSubmit={handleCreateRoom}
+                className="flex flex-col sm:flex-row gap-2"
+              >
                 <input
                   type="text"
                   value={newRoomName}
                   onChange={(e) => setNewRoomName(e.target.value)}
                   placeholder="Ex: Churrasco do Kinho, Resenha de Sábado..."
-                  className="flex-1 bg-zinc-900 border border-zinc-700 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-amber-500"
+                  className="w-full sm:flex-1 min-w-0 bg-zinc-900 border border-zinc-700 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-amber-500"
                 />
                 <button
                   type="submit"
-                  className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 font-extrabold text-xs sm:text-sm cursor-pointer shrink-0"
+                  className="w-full sm:w-auto flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 font-extrabold text-xs sm:text-sm cursor-pointer shrink-0"
                 >
                   <PlusCircle className="w-4 h-4" /> Ativar Sala
                 </button>

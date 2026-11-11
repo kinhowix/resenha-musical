@@ -306,58 +306,96 @@ export default function App() {
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col">
       {/* Header Principal */}
-      <header className="sticky top-0 z-40 bg-zinc-950/90 backdrop-blur-md border-b border-zinc-800/80">
-        <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between gap-2">
-          {/* Logo & Nome da Sala */}
-          <div
-            onClick={() => setActiveTab('viewer')}
-            className="flex items-center gap-2.5 cursor-pointer min-w-0"
-          >
-            <div className="w-10 h-10 rounded-xl bg-amber-500 text-zinc-950 flex items-center justify-center shadow-lg shadow-amber-500/20 shrink-0">
-              <Guitar className="w-6 h-6 stroke-[2.2]" />
-            </div>
-            <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <span className="font-extrabold text-sm sm:text-lg tracking-tight text-white truncate">
-                  {session.roomName || 'Resenha Musical'}
-                </span>
-                <span
-                  title={
-                    connStatus.mode === 'cloud'
-                      ? 'Conectado e sincronizando no Firebase Firestore!'
-                      : 'Modo Local'
-                  }
-                  className={`hidden md:inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border shrink-0 ${
-                    connStatus.mode === 'cloud'
-                      ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
-                      : 'bg-amber-500/10 border-amber-500/30 text-amber-400'
-                  }`}
-                >
-                  {connStatus.mode === 'cloud' ? (
-                    <>
-                      <Cloud className="w-3 h-3" /> Ao Vivo
-                    </>
-                  ) : (
-                    <>
-                      <HardDrive className="w-3 h-3" /> Local
-                    </>
-                  )}
-                </span>
+      <header className="sticky top-0 z-40 bg-zinc-950/95 backdrop-blur-md border-b border-zinc-800/80">
+        <div className="max-w-6xl mx-auto px-3 sm:px-4 py-2 sm:py-0 sm:h-16 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+          {/* Linha 1 Mobile / Esquerda Desktop: Logo, Nome da Sala e Botão Mestre */}
+          <div className="flex items-center justify-between gap-2 min-w-0">
+            <div
+              onClick={() => setActiveTab('viewer')}
+              className="flex items-center gap-2.5 cursor-pointer min-w-0"
+            >
+              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-amber-500 text-zinc-950 flex items-center justify-center shadow-lg shadow-amber-500/20 shrink-0">
+                <Guitar className="w-5 h-5 sm:w-6 sm:h-6 stroke-[2.2]" />
               </div>
-              <p className="text-[11px] text-zinc-400 truncate">
-                {isMaster
-                  ? 'Painel Mestre Ativo • Controle Total da Roda'
-                  : 'Resenha Musical • Sincronizado em Tempo Real'}
-              </p>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="font-extrabold text-sm sm:text-lg tracking-tight text-white truncate">
+                    {session.roomName || 'Resenha Musical'}
+                  </span>
+                  <span
+                    title={
+                      connStatus.mode === 'cloud'
+                        ? 'Conectado e sincronizando no Firebase Firestore!'
+                        : 'Modo Local'
+                    }
+                    className={`hidden md:inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border shrink-0 ${
+                      connStatus.mode === 'cloud'
+                        ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+                        : 'bg-amber-500/10 border-amber-500/30 text-amber-400'
+                    }`}
+                  >
+                    {connStatus.mode === 'cloud' ? (
+                      <>
+                        <Cloud className="w-3 h-3" /> Ao Vivo
+                      </>
+                    ) : (
+                      <>
+                        <HardDrive className="w-3 h-3" /> Local
+                      </>
+                    )}
+                  </span>
+                </div>
+                <p className="text-[11px] text-zinc-400 truncate">
+                  {isMaster
+                    ? 'Painel Mestre Ativo'
+                    : 'Resenha Musical • Sincronizado em Tempo Real'}
+                </p>
+              </div>
+            </div>
+
+            {/* Botão Mestre visível na Linha 1 no Celular para não espremer as abas */}
+            <div className="flex sm:hidden items-center gap-1.5 shrink-0">
+              {isMaster && (
+                <button
+                  onClick={() => {
+                    setEditingSong(null);
+                    setIsModalOpen(true);
+                  }}
+                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-amber-500 text-zinc-950 text-xs font-extrabold cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5 stroke-[2.5]" /> Cifra
+                </button>
+              )}
+
+              <button
+                onClick={() => setIsMasterModalOpen(true)}
+                className={`flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-bold border transition cursor-pointer ${
+                  isMaster
+                    ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300'
+                    : 'bg-zinc-900 border-zinc-800 text-zinc-400'
+                }`}
+              >
+                {isMaster ? (
+                  <>
+                    <Share2 className="w-3.5 h-3.5" />
+                    <span>Sala</span>
+                  </>
+                ) : (
+                  <>
+                    <Lock className="w-3.5 h-3.5" />
+                    <span>Mestre</span>
+                  </>
+                )}
+              </button>
             </div>
           </div>
 
-          {/* Navegação por Abas (Exclusiva para o Mestre; Convidados veem a tela unificada super simples) */}
+          {/* Linha 2 Mobile / Centro Desktop: Navegação por Abas do Mestre */}
           {isMaster && (
-            <nav className="flex items-center gap-0.5 sm:gap-1 bg-zinc-900 border border-zinc-800 rounded-xl p-1">
+            <nav className="flex items-center justify-between sm:justify-center gap-1 bg-zinc-900 border border-zinc-800 rounded-xl p-1 w-full sm:w-auto">
               <button
                 onClick={() => setActiveTab('viewer')}
-                className={`flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg text-[11px] sm:text-xs font-semibold transition cursor-pointer ${
+                className={`flex-1 sm:flex-initial flex items-center justify-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ${
                   activeTab === 'viewer'
                     ? 'bg-amber-500 text-zinc-950 shadow'
                     : 'text-zinc-400 hover:text-white'
@@ -369,7 +407,7 @@ export default function App() {
 
               <button
                 onClick={() => setActiveTab('repertoire')}
-                className={`flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg text-[11px] sm:text-xs font-semibold transition cursor-pointer ${
+                className={`flex-1 sm:flex-initial flex items-center justify-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ${
                   activeTab === 'repertoire'
                     ? 'bg-amber-500 text-zinc-950 shadow'
                     : 'text-zinc-400 hover:text-white'
@@ -381,7 +419,7 @@ export default function App() {
 
               <button
                 onClick={() => setActiveTab('jukebox')}
-                className={`flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg text-[11px] sm:text-xs font-semibold transition cursor-pointer ${
+                className={`flex-1 sm:flex-initial flex items-center justify-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ${
                   activeTab === 'jukebox'
                     ? 'bg-amber-500 text-zinc-950 shadow'
                     : 'text-zinc-400 hover:text-white'
@@ -404,20 +442,20 @@ export default function App() {
 
               <button
                 onClick={() => setActiveTab('history')}
-                className={`flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg text-[11px] sm:text-xs font-semibold transition cursor-pointer ${
+                className={`flex-1 sm:flex-initial flex items-center justify-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ${
                   activeTab === 'history'
                     ? 'bg-amber-500 text-zinc-950 shadow'
                     : 'text-zinc-400 hover:text-white'
                 }`}
               >
                 <History className="w-3.5 h-3.5 shrink-0" />
-                <span className="hidden sm:inline">Tocadas</span>
+                <span>Tocadas</span>
               </button>
             </nav>
           )}
 
-          {/* Ações do Topo: Botão Sala/Mestre + Nova Cifra */}
-          <div className="flex items-center gap-2 shrink-0">
+          {/* Direita Desktop: Botão Sala/Mestre + Nova Cifra */}
+          <div className="hidden sm:flex items-center gap-2 shrink-0">
             {isMaster && (
               <button
                 onClick={() => {
@@ -446,7 +484,7 @@ export default function App() {
               {isMaster ? (
                 <>
                   <Share2 className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline">Sala & Convite</span>
+                  <span>Sala & Convite</span>
                 </>
               ) : (
                 <>

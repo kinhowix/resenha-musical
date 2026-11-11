@@ -14,6 +14,7 @@ import {
   Radio,
   Sparkles,
   Guitar,
+  Mic,
   X,
 } from 'lucide-react';
 import {
@@ -47,6 +48,7 @@ export default function ChordViewer({
   // Novo: Modo Cifra Simplificada (Iniciante) & Exibição de Diagramas de Acordes
   const [isSimplified, setIsSimplified] = useState(false);
   const [showDiagrams, setShowDiagrams] = useState(true);
+  const [lyricsOnly, setLyricsOnly] = useState(false);
   const [selectedPopupChord, setSelectedPopupChord] = useState(null);
 
   // Sincroniza estado com Fullscreen API (Android/PC)
@@ -148,7 +150,7 @@ export default function ChordViewer({
   return (
     <div className="relative pb-36">
       {/* Barra de Controle Superior */}
-      <div className="sticky top-14 sm:top-16 z-30 mb-4 sm:mb-6 bg-zinc-900/95 backdrop-blur-md border border-zinc-800 rounded-2xl p-2.5 sm:p-4 shadow-xl">
+      <div className="sticky top-[5.25rem] sm:top-16 z-30 mb-4 sm:mb-6 bg-zinc-900/95 backdrop-blur-md border border-zinc-800 rounded-2xl p-2.5 sm:p-4 shadow-xl">
         <div className="flex flex-col gap-2.5 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
           {/* Info da Música + Tom Atual */}
           <div className="flex items-center justify-between gap-2 min-w-0">
@@ -229,35 +231,54 @@ export default function ChordViewer({
               )}
             </div>
 
-            {/* Botão Modo Cifra Simplificada (Violeiro Iniciante) */}
+            {/* Botão Ocultar Cifras (Só Cantar) */}
             <button
               type="button"
-              onClick={() => setIsSimplified((prev) => !prev)}
-              title="Converte acordes difíceis (7M, 9, b5, /B) para acordes básicos simples"
+              onClick={() => setLyricsOnly((prev) => !prev)}
+              title="Oculta todos os acordes e mostra apenas a letra limpa para cantar"
               className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-extrabold border transition cursor-pointer ${
-                isSimplified
-                  ? 'bg-emerald-500 text-zinc-950 border-emerald-400 shadow-lg shadow-emerald-500/20'
+                lyricsOnly
+                  ? 'bg-amber-500 text-zinc-950 border-amber-400 shadow-lg shadow-amber-500/20'
                   : 'bg-zinc-950 border-zinc-800 text-zinc-300 hover:bg-zinc-800'
               }`}
             >
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>{isSimplified ? 'Cifra Simplificada!' : 'Simplificar Cifra'}</span>
+              <Mic className="w-3.5 h-3.5" />
+              <span>{lyricsOnly ? 'Só Letra (Ver Cifra)' : 'Só Letra'}</span>
             </button>
 
-            {/* Botão Mostrar/Ocultar Diagramas de Acordes */}
-            <button
-              type="button"
-              onClick={() => setShowDiagrams((prev) => !prev)}
-              title="Mostrar/Ocultar desenhos dos acordes no violão"
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border transition cursor-pointer ${
-                showDiagrams
-                  ? 'bg-amber-500/15 border-amber-500/40 text-amber-300'
-                  : 'bg-zinc-950 border-zinc-800 text-zinc-400 hover:bg-zinc-800'
-              }`}
-            >
-              <Guitar className="w-3.5 h-3.5" />
-              <span className="hidden md:inline">Acordes</span>
-            </button>
+            {!lyricsOnly && (
+              <>
+                {/* Botão Modo Cifra Simplificada (Violeiro Iniciante) */}
+                <button
+                  type="button"
+                  onClick={() => setIsSimplified((prev) => !prev)}
+                  title="Converte acordes difíceis (7M, 9, b5, /B) para acordes básicos simples"
+                  className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-extrabold border transition cursor-pointer ${
+                    isSimplified
+                      ? 'bg-emerald-500 text-zinc-950 border-emerald-400 shadow-lg shadow-emerald-500/20'
+                      : 'bg-zinc-950 border-zinc-800 text-zinc-300 hover:bg-zinc-800'
+                  }`}
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>{isSimplified ? 'Simplificada!' : 'Simplificar'}</span>
+                </button>
+
+                {/* Botão Mostrar/Ocultar Diagramas de Acordes */}
+                <button
+                  type="button"
+                  onClick={() => setShowDiagrams((prev) => !prev)}
+                  title="Mostrar/Ocultar desenhos dos acordes no violão"
+                  className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border transition cursor-pointer ${
+                    showDiagrams
+                      ? 'bg-amber-500/15 border-amber-500/40 text-amber-300'
+                      : 'bg-zinc-950 border-zinc-800 text-zinc-400 hover:bg-zinc-800'
+                  }`}
+                >
+                  <Guitar className="w-3.5 h-3.5" />
+                  <span className="hidden md:inline">Acordes</span>
+                </button>
+              </>
+            )}
 
             {/* Fonte +/- */}
             <div className="flex items-center bg-zinc-950 border border-zinc-800 rounded-xl p-0.5 sm:p-1">
@@ -302,7 +323,7 @@ export default function ChordViewer({
       </div>
 
       {/* Painel de Diagramas de Acordes da Música */}
-      {showDiagrams && uniqueChords.length > 0 && (
+      {!lyricsOnly && showDiagrams && uniqueChords.length > 0 && (
         <div className="mb-5 bg-zinc-900/70 border border-zinc-800/90 rounded-2xl p-3.5 sm:p-4">
           <div className="flex items-center justify-between mb-2.5">
             <span className="text-xs font-bold uppercase tracking-wider text-zinc-400 flex items-center gap-1.5">
@@ -348,6 +369,23 @@ export default function ChordViewer({
               return (
                 <div key={line.id} className="my-2">
                   <span className="section-comment">{line.text}</span>
+                </div>
+              );
+            }
+
+            if (lyricsOnly) {
+              const fullLineLyrics = line.pairs
+                .map((p) => p.lyrics || '')
+                .join('')
+                .trim();
+              if (!fullLineLyrics) return null;
+
+              return (
+                <div
+                  key={line.id}
+                  className="text-zinc-100 leading-relaxed mb-2 font-sans font-medium"
+                >
+                  {fullLineLyrics}
                 </div>
               );
             }

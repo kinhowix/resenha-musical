@@ -9,6 +9,7 @@ import {
   ZoomOut,
   Sparkles,
   Guitar,
+  Mic,
   X,
 } from 'lucide-react';
 import {
@@ -51,6 +52,7 @@ export default function GuestRoomView({
   const [scrollSpeed, setScrollSpeed] = useState(2.0);
   const [isSimplified, setIsSimplified] = useState(false);
   const [showDiagrams, setShowDiagrams] = useState(true);
+  const [lyricsOnly, setLyricsOnly] = useState(false);
   const [selectedPopupChord, setSelectedPopupChord] = useState(null);
 
   useEffect(() => {
@@ -216,8 +218,8 @@ export default function GuestRoomView({
       {/* VISÃO 1: CIFRA E LETRA DA MÚSICA TOCANDO AGORA */}
       {guestSection === 'lyrics' && currentSong && (
         <div className="space-y-4">
-          {/* Painel de Diagramas de Acordes para os Convidados */}
-          {showDiagrams && uniqueChords.length > 0 && (
+          {/* Painel de Diagramas de Acordes para os Convidados (Oculto se estiver no Modo Só Letra) */}
+          {!lyricsOnly && showDiagrams && uniqueChords.length > 0 && (
             <div className="bg-zinc-900/70 border border-zinc-800/90 rounded-2xl p-3.5 sm:p-4">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-xs font-bold uppercase tracking-wider text-zinc-400 flex items-center gap-1.5">
@@ -257,34 +259,56 @@ export default function GuestRoomView({
               </div>
 
               <div className="flex flex-wrap items-center gap-2">
-                {/* Botão Cifra Simplificada para Violeiros Iniciantes */}
+                {/* Botão Modo Cantor: Ocultar Cifras (Só Letra) */}
                 <button
                   type="button"
-                  onClick={() => setIsSimplified((prev) => !prev)}
-                  className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-extrabold border transition cursor-pointer ${
-                    isSimplified
-                      ? 'bg-emerald-500 text-zinc-950 border-emerald-400 shadow-lg shadow-emerald-500/20'
-                      : 'bg-zinc-950 border-zinc-800 text-zinc-300 hover:bg-zinc-800'
+                  onClick={() => setLyricsOnly((prev) => !prev)}
+                  className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-extrabold border transition cursor-pointer ${
+                    lyricsOnly
+                      ? 'bg-amber-500 text-zinc-950 border-amber-400 shadow-lg shadow-amber-500/20'
+                      : 'bg-zinc-950 border-zinc-800 text-zinc-200 hover:bg-zinc-800'
                   }`}
                 >
-                  <Sparkles className="w-3.5 h-3.5" />
+                  <Mic className="w-3.5 h-3.5" />
                   <span>
-                    {isSimplified ? 'Simplificada!' : 'Simplificar Cifra'}
+                    {lyricsOnly
+                      ? 'Mostrando Só Letra (Ver Cifras)'
+                      : 'Ocultar Cifras (Só Cantar)'}
                   </span>
                 </button>
 
-                <button
-                  type="button"
-                  onClick={() => setShowDiagrams((prev) => !prev)}
-                  className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border transition cursor-pointer ${
-                    showDiagrams
-                      ? 'bg-amber-500/15 border-amber-500/40 text-amber-300'
-                      : 'bg-zinc-950 border-zinc-800 text-zinc-400'
-                  }`}
-                >
-                  <Guitar className="w-3.5 h-3.5" />
-                  <span>Acordes</span>
-                </button>
+                {/* Botão Cifra Simplificada para Violeiros Iniciantes (aparece quando cifras estão visíveis) */}
+                {!lyricsOnly && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setIsSimplified((prev) => !prev)}
+                      className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-extrabold border transition cursor-pointer ${
+                        isSimplified
+                          ? 'bg-emerald-500 text-zinc-950 border-emerald-400 shadow-lg shadow-emerald-500/20'
+                          : 'bg-zinc-950 border-zinc-800 text-zinc-300 hover:bg-zinc-800'
+                      }`}
+                    >
+                      <Sparkles className="w-3.5 h-3.5" />
+                      <span>
+                        {isSimplified ? 'Simplificada!' : 'Simplificar Cifra'}
+                      </span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setShowDiagrams((prev) => !prev)}
+                      className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border transition cursor-pointer ${
+                        showDiagrams
+                          ? 'bg-amber-500/15 border-amber-500/40 text-amber-300'
+                          : 'bg-zinc-950 border-zinc-800 text-zinc-400'
+                      }`}
+                    >
+                      <Guitar className="w-3.5 h-3.5" />
+                      <span>Desenhos</span>
+                    </button>
+                  </>
+                )}
 
                 <div className="flex items-center bg-zinc-950 border border-zinc-800 rounded-xl p-1">
                   <button
@@ -305,7 +329,7 @@ export default function GuestRoomView({
               </div>
             </div>
 
-            {/* Cifra Completa com Acordes Clicáveis */}
+            {/* Cifra Completa ou Apenas Letra Limpa (para quem só vai cantar!) */}
             <div
               className="chord-sheet-container select-text overflow-x-auto"
               style={{ fontSize: `${fontSize}px` }}
@@ -321,6 +345,25 @@ export default function GuestRoomView({
                     </div>
                   );
                 }
+
+                if (lyricsOnly) {
+                  const fullLineLyrics = line.pairs
+                    .map((p) => p.lyrics || '')
+                    .join('')
+                    .trim();
+                  // Se a linha só tinha acordes (ex: Intro instrumental), oculta no modo Só Letra
+                  if (!fullLineLyrics) return null;
+
+                  return (
+                    <div
+                      key={line.id}
+                      className="text-zinc-100 leading-relaxed mb-2 font-sans font-medium"
+                    >
+                      {fullLineLyrics}
+                    </div>
+                  );
+                }
+
                 return (
                   <div key={line.id} className="chord-row">
                     {line.pairs.map((pair) => (
