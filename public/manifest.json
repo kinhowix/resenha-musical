@@ -6,6 +6,14 @@
   "display": "standalone",
   "background_color": "#09090b",
   "theme_color": "#f59e0b",
-  "orientation": "portrait-primary"
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
 }
 
