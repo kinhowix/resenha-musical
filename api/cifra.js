@@ -55,7 +55,6 @@ function extractCifraFromHtml(html, fallbackTitle = '', fallbackArtist = '') {
 
   if (!cleanCifra) return null;
 
-  // Extrai Título e Artista do <title> (Ex: "Evidências - Chitãozinho & Xororó - Cifra Club")
   let title = fallbackTitle;
   let artist = fallbackArtist;
   const titleTagMatch = html.match(/<title>([^<]+)<\/title>/i);
@@ -70,7 +69,6 @@ function extractCifraFromHtml(html, fallbackTitle = '', fallbackArtist = '') {
     }
   }
 
-  // Tenta detectar o Tom oficial na página ou pelo primeiro acorde
   const keyMatch =
     html.match(/cifra_tom[^>]*>[\s\S]*?>([A-G][#b]?m?)</i) ||
     html.match(/"key"\s*:\s*"([A-G][#b]?m?)"/i);
@@ -105,7 +103,6 @@ export default async function handler(req, res) {
       const songSlug = toCifraClubSlug(title);
       if (artistSlug && songSlug) {
         candidateUrls.push(`https://www.cifraclub.com.br/${artistSlug}/${songSlug}/`);
-        // Variação sem "e" para duplas caso necessário
         const artistSlugNoE = artistSlug.replace(/-e-/g, '-');
         if (artistSlugNoE !== artistSlug) {
           candidateUrls.push(`https://www.cifraclub.com.br/${artistSlugNoE}/${songSlug}/`);
@@ -114,10 +111,11 @@ export default async function handler(req, res) {
     }
 
     for (const targetUrl of candidateUrls) {
-      const response = await fetch(targetUrl, {
+      // Usa r.jina.ai com X-Return-Format: html para contornar bloqueio Akamai em IPs de datacenter (AWS/Vercel)
+      const jinaUrl = `https://r.jina.ai/${targetUrl}`;
+      const response = await fetch(jinaUrl, {
         headers: {
-          'User-Agent':
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+          'X-Return-Format': 'html',
           Accept: 'text/html,application/xhtml+xml',
         },
       });

@@ -24,7 +24,7 @@ export const RODA_POPULAR_SUGGESTIONS = [
   { title: 'Telegrama', artist: 'Zeca Baleiro', rhythm: 'MPB' },
   { title: 'Borbulhas de Amor', artist: 'Fagner', rhythm: 'MPB' },
   { title: 'La Belle de Jour', artist: 'Alceu Valença', rhythm: 'MPB / Xote' },
-  { title: ' Flor de Lis', artist: 'Djavan', rhythm: 'MPB / Samba' },
+  { title: 'Flor de Lis', artist: 'Djavan', rhythm: 'MPB / Samba' },
 ];
 
 export function toCifraClubSlug(text = '') {
@@ -166,7 +166,46 @@ export async function searchSongsOnline(query) {
  * Baixa e extrai a cifra completa do Cifra Club (por Nome+Artista ou Link Direto)
  */
 export async function fetchCifraOnline({ url, title = '', artist = '' }) {
-  // 1. Tenta primeiro pela rota Serverless da Vercel (/api/cifra)
+  const candidateUrls = [];
+  if (url && url.includes('cifraclub.com.br')) {
+    candidateUrls.push(url.trim());
+  }
+  if (artist && title) {
+    const artistSlug = toCifraClubSlug(artist.split(',')[0]);
+    const songSlug = toCifraClubSlug(title);
+    if (artistSlug && songSlug) {
+      candidateUrls.push(`https://www.cifraclub.com.br/${artistSlug}/${songSlug}/`);
+      const artistSlugNoE = artistSlug.replace(/-e-/g, '-');
+      if (artistSlugNoE !== artistSlug) {
+        candidateUrls.push(`https://www.cifraclub.com.br/${artistSlugNoE}/${songSlug}/`);
+      }
+    }
+  }
+
+  // 1. Extração direta via r.jina.ai (possui CORS liberado e não sofre bloqueio Akamai/408)
+  for (const targetUrl of candidateUrls) {
+    try {
+      const r = await fetch(`https://r.jina.ai/${targetUrl}`, {
+        headers: {
+          'X-Return-Format': 'html',
+        },
+      });
+      if (!r.ok) continue;
+      const html = await r.text();
+      const extracted = extractCifraFromHtmlClient(html, title, artist);
+      if (extracted) {
+        return {
+          ok: true,
+          sourceUrl: targetUrl,
+          ...extracted,
+        };
+      }
+    } catch {
+      // tenta próximo candidato ou API serverless
+    }
+  }
+
+  // 2. Fallback pela rota Serverless da Vercel (/api/cifra)
   try {
     const params = new URLSearchParams();
     if (url) params.set('url', url);
@@ -182,38 +221,7 @@ export async function fetchCifraOnline({ url, title = '', artist = '' }) {
       }
     }
   } catch {
-    // Segue para o fallback via proxy público (útil no localhost / npm run dev)
-  }
-
-  // 2. Fallback via Proxy CORS no navegador
-  const targetUrl =
-    url && url.includes('cifraclub.com.br')
-      ? url.trim()
-      : `https://www.cifraclub.com.br/${toCifraClubSlug(artist)}/${toCifraClubSlug(
-          title
-        )}/`;
-
-  const proxyUrls = [
-    `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`,
-    `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(targetUrl)}`,
-  ];
-
-  for (const pUrl of proxyUrls) {
-    try {
-      const r = await fetch(pUrl);
-      if (!r.ok) continue;
-      const html = await r.text();
-      const extracted = extractCifraFromHtmlClient(html, title, artist);
-      if (extracted) {
-        return {
-          ok: true,
-          sourceUrl: targetUrl,
-          ...extracted,
-        };
-      }
-    } catch {
-      // tenta próximo proxy
-    }
+    // ignore
   }
 
   throw new Error(
