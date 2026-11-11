@@ -5,8 +5,8 @@ export const INITIAL_SONGS = [
     artist: 'Legião Urbana',
     originalKey: 'Em',
     rhythm: 'Pop Rock',
-    playCount: 12,
-    lastPlayedAt: '2026-11-08T22:15:00.000Z',
+    playCount: 0,
+    lastPlayedAt: null,
     content: `{comment: Intro}
 [C] [Am7] [Bm7] [Em]
 [C] [Am7] [Bm7] [Em]
@@ -49,8 +49,8 @@ Dis[C]tantes de [Am7]tudo
     artist: 'Os Paralamas do Sucesso',
     originalKey: 'A',
     rhythm: 'Ska / Rock',
-    playCount: 9,
-    lastPlayedAt: '2026-11-08T21:40:00.000Z',
+    playCount: 0,
+    lastPlayedAt: null,
     content: `{comment: Intro}
 [A] [E] [D] [Dm] (2x)
 
@@ -84,8 +84,8 @@ Não me a[D]bandone [Dm]jamais`
     artist: 'Alceu Valença',
     originalKey: 'G',
     rhythm: 'Baião / MPB',
-    playCount: 15,
-    lastPlayedAt: '2026-11-09T01:10:00.000Z',
+    playCount: 0,
+    lastPlayedAt: null,
     content: `{comment: Primeira Parte}
 Na [G]bruma leve das paixões
 Que [Em]vêm de dentro
@@ -119,8 +119,8 @@ Nos si[D]nos das cate[G]drais`
     artist: 'Tim Maia',
     originalKey: 'Em',
     rhythm: 'Soul / Groove',
-    playCount: 8,
-    lastPlayedAt: '2026-11-07T23:00:00.000Z',
+    playCount: 0,
+    lastPlayedAt: null,
     content: `{comment: Primeira Parte}
 [Em]Uma luz azul me [Am]guia
 Com a [D]firmeza e os lampejos do fa[G]rol [B7]

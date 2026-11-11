@@ -1002,3 +1002,69 @@ export async function registerSongPlayed(
     );
   }
 }
+
+/**
+ * Zera a contagem de vezes tocadas (playCount) de uma música específica (Mestre)
+ */
+export async function resetSongPlayCount(songId) {
+  if (!songId) return;
+  const songs = getLocalSongs().map((s) =>
+    s.id === songId ? { ...s, playCount: 0, lastPlayedAt: null } : s
+  );
+  saveLocalSongs(songs);
+
+  if (db) {
+    try {
+      await withTimeout(
+        setDoc(
+          doc(db, 'songs', songId),
+          { playCount: 0, lastPlayedAt: null },
+          { merge: true }
+        ),
+        3000
+      );
+    } catch {
+      // ignore
+    }
+  }
+}
+
+/**
+ * Zera a contagem de vezes tocadas (playCount) de TODAS as músicas ("As Campeãs da Resenha")
+ */
+export async function resetAllSongsPlayCount() {
+  const currentSongs = getLocalSongs();
+  const songsToReset = currentSongs.filter((s) => (s.playCount || 0) > 0);
+  const updatedSongs = currentSongs.map((s) => ({
+    ...s,
+    playCount: 0,
+    lastPlayedAt: null,
+  }));
+  saveLocalSongs(updatedSongs);
+
+  if (db) {
+    for (const song of songsToReset) {
+      try {
+        await withTimeout(
+          setDoc(
+            doc(db, 'songs', song.id),
+            { playCount: 0, lastPlayedAt: null },
+            { merge: true }
+          ),
+          3000
+        );
+      } catch {
+        // ignore
+      }
+    }
+  }
+}
+
+/**
+ * Limpa apenas o histórico recente de músicas tocadas da sala atual (Mestre)
+ */
+export async function clearRoomHistory(roomId) {
+  if (!roomId) return;
+  await updateLiveSession({ history: [] }, roomId);
+}
+

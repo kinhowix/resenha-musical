@@ -30,6 +30,9 @@ import {
   addSongSuggestion,
   removeSongSuggestion,
   clearRoomSuggestions,
+  resetAllSongsPlayCount,
+  resetSongPlayCount,
+  clearRoomHistory,
 } from './services/hybridStore';
 import ChordViewer from './components/ChordViewer';
 import SongListView from './components/SongListView';
@@ -319,6 +322,24 @@ export default function App() {
       currentRoomId
     );
     showToast('Música salva no histórico de Tocadas da Resenha!');
+  };
+
+  // Zerar contagem de todas as músicas ("As Campeãs da Resenha")
+  const handleResetAllPlayCounts = async () => {
+    await resetAllSongsPlayCount();
+    showToast('Contagem das Campeãs da Resenha zerada!');
+  };
+
+  // Zerar contagem de uma música específica
+  const handleResetSongPlayCount = async (songId, songTitle) => {
+    await resetSongPlayCount(songId);
+    showToast(`Contagem de "${songTitle}" zerada!`);
+  };
+
+  // Limpar histórico recente de tocadas da sala atual
+  const handleClearHistory = async () => {
+    await clearRoomHistory(currentRoomId);
+    showToast('Histórico recente da roda limpo!');
   };
 
   // Salvar (Criar ou Atualizar) música
@@ -631,6 +652,9 @@ export default function App() {
                 songs={songs}
                 history={session?.history || []}
                 onSelectSong={handleSelectSong}
+                onResetAllPlayCounts={handleResetAllPlayCounts}
+                onResetSongPlayCount={handleResetSongPlayCount}
+                onClearHistory={handleClearHistory}
               />
             )}
           </>
