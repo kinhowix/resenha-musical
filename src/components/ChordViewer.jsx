@@ -1,7 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
-  Play,
-  Pause,
   Maximize2,
   Minimize2,
   Plus,
@@ -14,8 +12,18 @@ import {
   ZoomIn,
   ZoomOut,
   Radio,
+  Sparkles,
+  Guitar,
+  X,
 } from 'lucide-react';
-import { parseChordProSong, transposeChordSymbol } from '../utils/chordParser';
+import {
+  parseChordProSong,
+  transposeChordSymbol,
+  extractUniqueChords,
+} from '../utils/chordParser';
+import { simplifyChordSymbol } from '../utils/chordDictionary';
+import ChordDiagram from './ChordDiagram';
+import FloatingScrollControl from './FloatingScrollControl';
 
 export default function ChordViewer({
   song,
@@ -30,11 +38,16 @@ export default function ChordViewer({
   onToggleSyncRoom,
 }) {
   const [isAutoScrolling, setIsAutoScrolling] = useState(false);
-  const [scrollSpeed, setScrollSpeed] = useState(2); // 1 a 5
+  const [scrollSpeed, setScrollSpeed] = useState(2.0); // 0.5 a 5.0
   const [fontSize, setFontSize] = useState(() =>
     typeof window !== 'undefined' && window.innerWidth < 640 ? 15 : 18
   );
   const [isFullscreen, setIsFullscreen] = useState(false);
+
+  // Novo: Modo Cifra Simplificada (Iniciante) & Exibição de Diagramas de Acordes
+  const [isSimplified, setIsSimplified] = useState(false);
+  const [showDiagrams, setShowDiagrams] = useState(true);
+  const [selectedPopupChord, setSelectedPopupChord] = useState(null);
 
   // Sincroniza estado com Fullscreen API (Android/PC)
   useEffect(() => {
@@ -63,11 +76,11 @@ export default function ChordViewer({
     };
   }, [song?.id, isAutoScrolling]);
 
-  // Rolagem Automática usando window.scrollBy (ou container no modo tela cheia do iOS)
+  // Rolagem Automática contínua com velocidade ajustável por + e -
   useEffect(() => {
     if (!isAutoScrolling) return;
 
-    const intervalMs = Math.max(18, 85 - scrollSpeed * 14);
+    const intervalMs = Math.max(12, Math.round(90 - scrollSpeed * 15));
     const timer = setInterval(() => {
       window.scrollBy({ top: 1, behavior: 'auto' });
 
@@ -85,6 +98,7 @@ export default function ChordViewer({
   // Para rolagem ao trocar de música e sobe pro topo
   useEffect(() => {
     setIsAutoScrolling(false);
+    setSelectedPopupChord(null);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }, [song?.id]);
 
@@ -100,7 +114,6 @@ export default function ChordViewer({
           setIsFullscreen(false);
         }
       } else {
-        // Fallback nativo para iPhone (iOS Safari não tem requestFullscreen para divs)
         setIsFullscreen((prev) => !prev);
       }
     } catch {
@@ -109,12 +122,17 @@ export default function ChordViewer({
   };
 
   const parsedLines = useMemo(() => {
-    return parseChordProSong(song?.content || '', transpose);
-  }, [song?.content, transpose]);
+    return parseChordProSong(song?.content || '', transpose, isSimplified);
+  }, [song?.content, transpose, isSimplified]);
+
+  const uniqueChords = useMemo(() => {
+    return extractUniqueChords(parsedLines);
+  }, [parsedLines]);
 
   const currentKey = useMemo(() => {
-    return transposeChordSymbol(song?.originalKey || 'C', transpose);
-  }, [song?.originalKey, transpose]);
+    const transposedKey = transposeChordSymbol(song?.originalKey || 'C', transpose);
+    return isSimplified ? simplifyChordSymbol(transposedKey) : transposedKey;
+  }, [song?.originalKey, transpose, isSimplified]);
 
   if (!song) {
     return (
@@ -129,7 +147,7 @@ export default function ChordViewer({
 
   return (
     <div className="relative pb-36">
-      {/* Barra de Controle Flutuante (Adaptada para Mobile Android/iPhone & Desktop) */}
+      {/* Barra de Controle Superior */}
       <div className="sticky top-14 sm:top-16 z-30 mb-4 sm:mb-6 bg-zinc-900/95 backdrop-blur-md border border-zinc-800 rounded-2xl p-2.5 sm:p-4 shadow-xl">
         <div className="flex flex-col gap-2.5 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
           {/* Info da Música + Tom Atual */}
@@ -175,7 +193,7 @@ export default function ChordViewer({
             </button>
           </div>
 
-          {/* Controles de Transposição + Rolagem + Fonte + Tela Cheia */}
+          {/* Controles de Tom, Simplificação, Diagramas, Fonte e Tela Cheia */}
           <div className="flex flex-wrap items-center justify-between sm:justify-end gap-1.5 sm:gap-2">
             {/* Transposição Dinâmica (-1 / +1) */}
             <div className="flex items-center bg-zinc-950 border border-zinc-800 rounded-xl p-0.5 sm:p-1">
@@ -211,47 +229,37 @@ export default function ChordViewer({
               )}
             </div>
 
-            {/* Rolagem Automática */}
-            <div className="flex items-center bg-zinc-950 border border-zinc-800 rounded-xl p-0.5 sm:p-1 gap-1">
-              <button
-                onClick={() => setIsAutoScrolling((prev) => !prev)}
-                className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ${
-                  isAutoScrolling
-                    ? 'bg-amber-500 text-zinc-950 shadow-lg shadow-amber-500/20'
-                    : 'hover:bg-zinc-800 text-zinc-200'
-                }`}
-              >
-                {isAutoScrolling ? (
-                  <>
-                    <Pause className="w-3.5 h-3.5 fill-current" />{' '}
-                    <span>Pausar</span>
-                  </>
-                ) : (
-                  <>
-                    <Play className="w-3.5 h-3.5 fill-current" />{' '}
-                    <span>Rolar</span>
-                  </>
-                )}
-              </button>
+            {/* Botão Modo Cifra Simplificada (Violeiro Iniciante) */}
+            <button
+              type="button"
+              onClick={() => setIsSimplified((prev) => !prev)}
+              title="Converte acordes difíceis (7M, 9, b5, /B) para acordes básicos simples"
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-extrabold border transition cursor-pointer ${
+                isSimplified
+                  ? 'bg-emerald-500 text-zinc-950 border-emerald-400 shadow-lg shadow-emerald-500/20'
+                  : 'bg-zinc-950 border-zinc-800 text-zinc-300 hover:bg-zinc-800'
+              }`}
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>{isSimplified ? 'Cifra Simplificada!' : 'Simplificar Cifra'}</span>
+            </button>
 
-              <div className="flex items-center px-1 gap-0.5">
-                {[1, 2, 3, 4, 5].map((spd) => (
-                  <button
-                    key={spd}
-                    onClick={() => setScrollSpeed(spd)}
-                    className={`w-5 h-6 sm:w-6 sm:h-6 rounded text-[11px] font-mono font-bold transition cursor-pointer ${
-                      scrollSpeed === spd
-                        ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40'
-                        : 'text-zinc-400 hover:bg-zinc-800'
-                    }`}
-                  >
-                    {spd}
-                  </button>
-                ))}
-              </div>
-            </div>
+            {/* Botão Mostrar/Ocultar Diagramas de Acordes */}
+            <button
+              type="button"
+              onClick={() => setShowDiagrams((prev) => !prev)}
+              title="Mostrar/Ocultar desenhos dos acordes no violão"
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border transition cursor-pointer ${
+                showDiagrams
+                  ? 'bg-amber-500/15 border-amber-500/40 text-amber-300'
+                  : 'bg-zinc-950 border-zinc-800 text-zinc-400 hover:bg-zinc-800'
+              }`}
+            >
+              <Guitar className="w-3.5 h-3.5" />
+              <span className="hidden md:inline">Acordes</span>
+            </button>
 
-            {/* Fonte +/- (Visível no celular também para ajustar na tela do Android/iPhone!) */}
+            {/* Fonte +/- */}
             <div className="flex items-center bg-zinc-950 border border-zinc-800 rounded-xl p-0.5 sm:p-1">
               <button
                 onClick={() => setFontSize((f) => Math.max(12, f - 1))}
@@ -281,7 +289,7 @@ export default function ChordViewer({
             >
               {isFullscreen ? (
                 <>
-                  <Minimize2 className="w-4 h-4" /> Sair Tela Cheia
+                  <Minimize2 className="w-4 h-4" /> Sair
                 </>
               ) : (
                 <>
@@ -292,6 +300,38 @@ export default function ChordViewer({
           </div>
         </div>
       </div>
+
+      {/* Painel de Diagramas de Acordes da Música */}
+      {showDiagrams && uniqueChords.length > 0 && (
+        <div className="mb-5 bg-zinc-900/70 border border-zinc-800/90 rounded-2xl p-3.5 sm:p-4">
+          <div className="flex items-center justify-between mb-2.5">
+            <span className="text-xs font-bold uppercase tracking-wider text-zinc-400 flex items-center gap-1.5">
+              <Guitar className="w-3.5 h-3.5 text-amber-400" />
+              Acordes desta música ({uniqueChords.length}){' '}
+              {isSimplified && (
+                <span className="text-emerald-400 font-extrabold">
+                  • Versão Simplificada Ativa
+                </span>
+              )}
+            </span>
+            <span className="text-[11px] text-zinc-500 hidden sm:inline">
+              Toque em qualquer acorde na letra para ampliar o desenho
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2.5 overflow-x-auto pb-1.5">
+            {uniqueChords.map((chordName) => (
+              <div
+                key={chordName}
+                onClick={() => setSelectedPopupChord(chordName)}
+                className="cursor-pointer hover:scale-105 transition"
+              >
+                <ChordDiagram chord={chordName} size="md" />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Folha de Cifra */}
       <div className="bg-zinc-900/60 border border-zinc-800/80 rounded-2xl p-4 sm:p-8 shadow-inner overflow-x-auto">
@@ -316,7 +356,23 @@ export default function ChordViewer({
               <div key={line.id} className="chord-row">
                 {line.pairs.map((pair) => (
                   <span key={pair.id} className="chord-pair">
-                    <span className="chord-symbol">
+                    <span
+                      onClick={() =>
+                        pair.chords &&
+                        pair.chords.trim() &&
+                        setSelectedPopupChord(pair.chords.trim())
+                      }
+                      title={
+                        pair.chords?.trim()
+                          ? `Clique para ver o desenho do acorde ${pair.chords.trim()}`
+                          : undefined
+                      }
+                      className={`chord-symbol ${
+                        pair.chords?.trim()
+                          ? 'cursor-pointer hover:underline hover:text-amber-300'
+                          : ''
+                      }`}
+                    >
                       {pair.chords || '\u00A0'}
                     </span>
                     <span className="chord-lyrics">
@@ -372,6 +428,43 @@ export default function ChordViewer({
           </div>
         </div>
       </div>
+
+      {/* Modal Rápido de Diagrama Ampliado ao Clicar em um Acorde */}
+      {selectedPopupChord && (
+        <div
+          onClick={() => setSelectedPopupChord(null)}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs p-4"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-zinc-900 border border-amber-500/40 rounded-3xl p-5 flex flex-col items-center gap-3 shadow-2xl"
+          >
+            <div className="flex items-center justify-between w-full gap-6">
+              <span className="text-xs font-bold uppercase tracking-wider text-zinc-400">
+                Desenho no Violão
+              </span>
+              <button
+                onClick={() => setSelectedPopupChord(null)}
+                className="p-1 text-zinc-400 hover:text-white rounded-lg cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <ChordDiagram chord={selectedPopupChord} size="lg" />
+            <span className="text-[11px] text-zinc-400">
+              Dedos: 1=Indicador • 2=Médio • 3=Anelar • 4=Mínimo
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* Controle Flutuante de Rolagem Sempre Visível (+ e -) */}
+      <FloatingScrollControl
+        isAutoScrolling={isAutoScrolling}
+        onToggleScroll={() => setIsAutoScrolling((prev) => !prev)}
+        scrollSpeed={scrollSpeed}
+        onChangeSpeed={setScrollSpeed}
+      />
     </div>
   );
 }

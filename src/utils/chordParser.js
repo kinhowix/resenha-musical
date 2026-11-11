@@ -1,4 +1,5 @@
 import ChordSheetJS from 'chordsheetjs';
+import { simplifyChordSymbol } from './chordDictionary';
 
 const NOTES_SHARP = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 const NOTES_FLAT = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B'];
@@ -237,8 +238,11 @@ export function transposeChordSymbol(chordStr, semitones) {
 /**
  * Faz o parse de uma cifra (tanto no formato ChordPro quanto no formato tradicional Acorde-sobre-Letra)
  * e retorna linhas estruturadas para o React.
+ * @param {string} rawContent
+ * @param {number} transposeDelta
+ * @param {boolean} simplify - Se true, converte os acordes para tríades básicas na exibição
  */
-export function parseChordProSong(rawContent, transposeDelta = 0) {
+export function parseChordProSong(rawContent, transposeDelta = 0, simplify = false) {
   if (!rawContent) return [];
 
   // Se o texto tiver linhas de acordes tradicionais sem colchetes, converte automaticamente em memória!
@@ -251,10 +255,32 @@ export function parseChordProSong(rawContent, transposeDelta = 0) {
     : rawContent;
 
   // Usa nosso parser que preserva perfeitamente todo tipo de notação brasileira (7M, 4/7, F#m7(b5), etc.)
-  return fallbackRegexParse(normalizedContent, transposeDelta);
+  return fallbackRegexParse(normalizedContent, transposeDelta, simplify);
 }
 
-function fallbackRegexParse(rawContent, transposeDelta) {
+/**
+ * Extrai a lista de acordes únicos presentes nas linhas já processadas da música
+ */
+export function extractUniqueChords(parsedLines = []) {
+  const seen = new Set();
+  const unique = [];
+
+  parsedLines.forEach((line) => {
+    if (line.type !== 'musical' || !line.pairs) return;
+    line.pairs.forEach((pair) => {
+      const c = pair.chords?.trim();
+      if (!c || /^\(?\d+x\)?$/i.test(c)) return;
+      if (!seen.has(c)) {
+        seen.add(c);
+        unique.push(c);
+      }
+    });
+  });
+
+  return unique;
+}
+
+function fallbackRegexParse(rawContent, transposeDelta, simplify = false) {
   const lines = rawContent.split(/\r?\n/);
   return lines.map((line, lineIdx) => {
     const trimmed = line.trim();
@@ -294,9 +320,11 @@ function fallbackRegexParse(rawContent, transposeDelta) {
     let match;
     let idx = 0;
     while ((match = regex.exec(line)) !== null) {
+      const transposed = transposeChordSymbol(match[1], transposeDelta);
+      const finalChord = simplify ? simplifyChordSymbol(transposed) : transposed;
       pairs.push({
         id: `pair-${lineIdx}-${idx++}`,
-        chords: transposeChordSymbol(match[1], transposeDelta),
+        chords: finalChord,
         lyrics: match[2] || '',
       });
     }

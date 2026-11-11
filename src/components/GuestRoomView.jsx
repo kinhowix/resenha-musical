@@ -5,14 +5,20 @@ import {
   Search,
   Trophy,
   Music,
-  Play,
-  Pause,
   ZoomIn,
   ZoomOut,
-  Check,
   Sparkles,
+  Guitar,
+  X,
 } from 'lucide-react';
-import { parseChordProSong, transposeChordSymbol } from '../utils/chordParser';
+import {
+  parseChordProSong,
+  transposeChordSymbol,
+  extractUniqueChords,
+} from '../utils/chordParser';
+import { simplifyChordSymbol } from '../utils/chordDictionary';
+import ChordDiagram from './ChordDiagram';
+import FloatingScrollControl from './FloatingScrollControl';
 
 const VOTER_NAME_KEY = 'resenha_guest_name_v1';
 const VOTED_SONGS_SESSION_KEY = 'resenha_voted_songs_v1';
@@ -42,11 +48,14 @@ export default function GuestRoomView({
   // Controles de leitura da cifra/letra para os amigos
   const [fontSize, setFontSize] = useState(16);
   const [isAutoScrolling, setIsAutoScrolling] = useState(false);
-  const [scrollSpeed, setScrollSpeed] = useState(2);
+  const [scrollSpeed, setScrollSpeed] = useState(2.0);
+  const [isSimplified, setIsSimplified] = useState(false);
+  const [showDiagrams, setShowDiagrams] = useState(true);
+  const [selectedPopupChord, setSelectedPopupChord] = useState(null);
 
   useEffect(() => {
     if (!isAutoScrolling || guestSection !== 'lyrics') return;
-    const intervalMs = Math.max(18, 85 - scrollSpeed * 14);
+    const intervalMs = Math.max(12, Math.round(90 - scrollSpeed * 15));
     const timer = setInterval(() => {
       window.scrollBy({ top: 1, behavior: 'auto' });
       const atBottom =
@@ -74,12 +83,20 @@ export default function GuestRoomView({
   };
 
   const parsedLines = useMemo(() => {
-    return parseChordProSong(currentSong?.content || '', transpose);
-  }, [currentSong?.content, transpose]);
+    return parseChordProSong(currentSong?.content || '', transpose, isSimplified);
+  }, [currentSong?.content, transpose, isSimplified]);
+
+  const uniqueChords = useMemo(() => {
+    return extractUniqueChords(parsedLines);
+  }, [parsedLines]);
 
   const currentKey = useMemo(() => {
-    return transposeChordSymbol(currentSong?.originalKey || 'C', transpose);
-  }, [currentSong?.originalKey, transpose]);
+    const transposedKey = transposeChordSymbol(
+      currentSong?.originalKey || 'C',
+      transpose
+    );
+    return isSimplified ? simplifyChordSymbol(transposedKey) : transposedKey;
+  }, [currentSong?.originalKey, transpose, isSimplified]);
 
   const filteredSongs = useMemo(() => {
     return songs.filter(
@@ -91,7 +108,7 @@ export default function GuestRoomView({
   }, [songs, search]);
 
   return (
-    <div className="space-y-6 pb-24">
+    <div className="space-y-6 pb-32">
       {/* Banner de Boas-Vindas da Sala */}
       <div className="bg-gradient-to-br from-amber-500/20 via-zinc-900 to-zinc-900 border border-amber-500/40 rounded-3xl p-5 sm:p-6 shadow-xl">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -198,107 +215,147 @@ export default function GuestRoomView({
 
       {/* VISÃO 1: CIFRA E LETRA DA MÚSICA TOCANDO AGORA */}
       {guestSection === 'lyrics' && currentSong && (
-        <div className="bg-zinc-900/80 border border-zinc-800 rounded-3xl p-4 sm:p-8 shadow-xl">
-          {/* Barra Simples de Leitura para os Amigos */}
-          <div className="flex flex-wrap items-center justify-between gap-3 pb-4 mb-5 border-b border-zinc-800">
-            <div>
-              <span className="text-xs uppercase font-bold text-amber-400">
-                Acompanhando ao vivo
-              </span>
-              <h3 className="text-xl font-extrabold text-white">
-                {currentSong.title} — {currentSong.artist}
-              </h3>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setIsAutoScrolling((prev) => !prev)}
-                className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
-                  isAutoScrolling
-                    ? 'bg-amber-500 text-zinc-950'
-                    : 'bg-zinc-800 text-zinc-200'
-                }`}
-              >
-                {isAutoScrolling ? (
-                  <>
-                    <Pause className="w-4 h-4 fill-current" /> Pausar Rolagem
-                  </>
-                ) : (
-                  <>
-                    <Play className="w-4 h-4 fill-current" /> Rolar Tela
-                  </>
-                )}
-              </button>
-
-              {isAutoScrolling && (
-                <div className="flex items-center bg-zinc-950 border border-zinc-800 rounded-xl p-1 gap-1">
-                  {[1, 2, 3, 4].map((spd) => (
-                    <button
-                      key={spd}
-                      onClick={() => setScrollSpeed(spd)}
-                      className={`w-6 h-6 rounded text-xs font-bold cursor-pointer ${
-                        scrollSpeed === spd
-                          ? 'bg-amber-500 text-zinc-950'
-                          : 'text-zinc-400'
-                      }`}
-                    >
-                      {spd}
-                    </button>
-                  ))}
-                </div>
-              )}
-
-              <div className="flex items-center bg-zinc-950 border border-zinc-800 rounded-xl p-1">
-                <button
-                  onClick={() => setFontSize((f) => Math.max(13, f - 2))}
-                  className="p-1.5 text-zinc-300 hover:text-white cursor-pointer"
-                  title="Diminuir Letra"
-                >
-                  <ZoomOut className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={() => setFontSize((f) => Math.min(26, f + 2))}
-                  className="p-1.5 text-zinc-300 hover:text-white cursor-pointer"
-                  title="Aumentar Letra"
-                >
-                  <ZoomIn className="w-4 h-4" />
-                </button>
+        <div className="space-y-4">
+          {/* Painel de Diagramas de Acordes para os Convidados */}
+          {showDiagrams && uniqueChords.length > 0 && (
+            <div className="bg-zinc-900/70 border border-zinc-800/90 rounded-2xl p-3.5 sm:p-4">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-bold uppercase tracking-wider text-zinc-400 flex items-center gap-1.5">
+                  <Guitar className="w-3.5 h-3.5 text-amber-400" />
+                  Desenhos dos Acordes ({uniqueChords.length}){' '}
+                  {isSimplified && (
+                    <span className="text-emerald-400 font-extrabold">
+                      • Versão Simplificada
+                    </span>
+                  )}
+                </span>
+              </div>
+              <div className="flex items-center gap-2.5 overflow-x-auto pb-1">
+                {uniqueChords.map((chordName) => (
+                  <div
+                    key={chordName}
+                    onClick={() => setSelectedPopupChord(chordName)}
+                    className="cursor-pointer hover:scale-105 transition"
+                  >
+                    <ChordDiagram chord={chordName} size="md" />
+                  </div>
+                ))}
               </div>
             </div>
-          </div>
+          )}
 
-          {/* Cifra Completa com Acordes para Todo Mundo */}
-          <div
-            className="chord-sheet-container select-text overflow-x-auto"
-            style={{ fontSize: `${fontSize}px` }}
-          >
-            {parsedLines.map((line) => {
-              if (line.type === 'empty') {
-                return <div key={line.id} className="h-4 sm:h-5" />;
-              }
-              if (line.type === 'comment') {
+          <div className="bg-zinc-900/80 border border-zinc-800 rounded-3xl p-4 sm:p-8 shadow-xl">
+            {/* Barra Simples de Leitura para os Amigos */}
+            <div className="flex flex-wrap items-center justify-between gap-3 pb-4 mb-5 border-b border-zinc-800">
+              <div>
+                <span className="text-xs uppercase font-bold text-amber-400">
+                  Acompanhando ao vivo
+                </span>
+                <h3 className="text-xl font-extrabold text-white">
+                  {currentSong.title} — {currentSong.artist}
+                </h3>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                {/* Botão Cifra Simplificada para Violeiros Iniciantes */}
+                <button
+                  type="button"
+                  onClick={() => setIsSimplified((prev) => !prev)}
+                  className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-extrabold border transition cursor-pointer ${
+                    isSimplified
+                      ? 'bg-emerald-500 text-zinc-950 border-emerald-400 shadow-lg shadow-emerald-500/20'
+                      : 'bg-zinc-950 border-zinc-800 text-zinc-300 hover:bg-zinc-800'
+                  }`}
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>
+                    {isSimplified ? 'Simplificada!' : 'Simplificar Cifra'}
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setShowDiagrams((prev) => !prev)}
+                  className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border transition cursor-pointer ${
+                    showDiagrams
+                      ? 'bg-amber-500/15 border-amber-500/40 text-amber-300'
+                      : 'bg-zinc-950 border-zinc-800 text-zinc-400'
+                  }`}
+                >
+                  <Guitar className="w-3.5 h-3.5" />
+                  <span>Acordes</span>
+                </button>
+
+                <div className="flex items-center bg-zinc-950 border border-zinc-800 rounded-xl p-1">
+                  <button
+                    onClick={() => setFontSize((f) => Math.max(13, f - 2))}
+                    className="p-1.5 text-zinc-300 hover:text-white cursor-pointer"
+                    title="Diminuir Letra"
+                  >
+                    <ZoomOut className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => setFontSize((f) => Math.min(26, f + 2))}
+                    className="p-1.5 text-zinc-300 hover:text-white cursor-pointer"
+                    title="Aumentar Letra"
+                  >
+                    <ZoomIn className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Cifra Completa com Acordes Clicáveis */}
+            <div
+              className="chord-sheet-container select-text overflow-x-auto"
+              style={{ fontSize: `${fontSize}px` }}
+            >
+              {parsedLines.map((line) => {
+                if (line.type === 'empty') {
+                  return <div key={line.id} className="h-4 sm:h-5" />;
+                }
+                if (line.type === 'comment') {
+                  return (
+                    <div key={line.id} className="my-2">
+                      <span className="section-comment">{line.text}</span>
+                    </div>
+                  );
+                }
                 return (
-                  <div key={line.id} className="my-2">
-                    <span className="section-comment">{line.text}</span>
+                  <div key={line.id} className="chord-row">
+                    {line.pairs.map((pair) => (
+                      <span key={pair.id} className="chord-pair">
+                        <span
+                          onClick={() =>
+                            pair.chords?.trim() &&
+                            setSelectedPopupChord(pair.chords.trim())
+                          }
+                          className={`chord-symbol ${
+                            pair.chords?.trim()
+                              ? 'cursor-pointer hover:underline hover:text-amber-300'
+                              : ''
+                          }`}
+                        >
+                          {pair.chords || '\u00A0'}
+                        </span>
+                        <span className="chord-lyrics">
+                          {pair.lyrics || (pair.chords ? ' ' : '')}
+                        </span>
+                      </span>
+                    ))}
                   </div>
                 );
-              }
-              return (
-                <div key={line.id} className="chord-row">
-                  {line.pairs.map((pair) => (
-                    <span key={pair.id} className="chord-pair">
-                      <span className="chord-symbol">
-                        {pair.chords || '\u00A0'}
-                      </span>
-                      <span className="chord-lyrics">
-                        {pair.lyrics || (pair.chords ? ' ' : '')}
-                      </span>
-                    </span>
-                  ))}
-                </div>
-              );
-            })}
+              })}
+            </div>
           </div>
+
+          {/* Controle Flutuante Fixo de Rolagem (+ e -) */}
+          <FloatingScrollControl
+            isAutoScrolling={isAutoScrolling}
+            onToggleScroll={() => setIsAutoScrolling((prev) => !prev)}
+            scrollSpeed={scrollSpeed}
+            onChangeSpeed={setScrollSpeed}
+          />
         </div>
       )}
 
@@ -329,7 +386,7 @@ export default function GuestRoomView({
                   Nenhuma música na fila ainda!
                 </p>
                 <p className="text-xs mt-1">
-                  Toque em &ldquo;Pedir / Votar&rdquo; na lista abaixo para escolher a próxima música.
+                  Toque em &ldquo;Escolher&rdquo; na lista abaixo para pedir a próxima música.
                 </p>
               </div>
             ) : (
@@ -482,7 +539,35 @@ export default function GuestRoomView({
           </div>
         </div>
       )}
+
+      {/* Modal Rápido de Diagrama Ampliado ao Clicar em um Acorde */}
+      {selectedPopupChord && (
+        <div
+          onClick={() => setSelectedPopupChord(null)}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs p-4"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-zinc-900 border border-amber-500/40 rounded-3xl p-5 flex flex-col items-center gap-3 shadow-2xl"
+          >
+            <div className="flex items-center justify-between w-full gap-6">
+              <span className="text-xs font-bold uppercase tracking-wider text-zinc-400">
+                Desenho no Violão
+              </span>
+              <button
+                onClick={() => setSelectedPopupChord(null)}
+                className="p-1 text-zinc-400 hover:text-white rounded-lg cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <ChordDiagram chord={selectedPopupChord} size="lg" />
+            <span className="text-[11px] text-zinc-400">
+              Dedos: 1=Indicador • 2=Médio • 3=Anelar • 4=Mínimo
+            </span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
-
