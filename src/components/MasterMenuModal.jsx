@@ -31,6 +31,7 @@ export default function MasterMenuModal({
   onDeleteRoom,
   onDeleteOldRooms,
   onClearCurrentRoom,
+  connStatus,
 }) {
   const [passwordInput, setPasswordInput] = useState('');
   const [loginError, setLoginError] = useState('');
@@ -199,6 +200,36 @@ export default function MasterMenuModal({
         ) : (
           /* PAINEL DO MESTRE LOGADO */
           <div className="p-6 space-y-6 max-h-[82vh] overflow-y-auto">
+            {/* Alerta caso as Regras do Firebase Firestore ainda estejam bloqueando (Modo Local) */}
+            {connStatus?.mode !== 'cloud' && (
+              <div className="bg-amber-500/15 border border-amber-500/50 rounded-2xl p-4 space-y-2 text-xs">
+                <p className="font-extrabold text-amber-300 text-sm">
+                  ⚠️ Atenção: Sincronização entre PC e Celular bloqueada no Firebase!
+                </p>
+                <p className="text-zinc-300">
+                  O banco de dados do Firebase está com a regra padrão bloqueada (<code>if false;</code>). Para o voto do celular aparecer no PC em tempo real:
+                </p>
+                <ol className="list-decimal list-inside text-zinc-300 space-y-1">
+                  <li>
+                    Abra as{' '}
+                    <a
+                      href="https://console.firebase.google.com/project/resenha-musical/firestore/databases/-default-/rules"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-amber-400 underline font-bold"
+                    >
+                      Regras do Firestore no Firebase Console (clique aqui)
+                    </a>
+                  </li>
+                  <li>
+                    Troque <code>allow read, write: if false;</code> por{' '}
+                    <code className="text-emerald-400 font-bold">allow read, write: if true;</code>
+                  </li>
+                  <li>Clique no botão <strong>Publicar (Publish)</strong> lá no Firebase!</li>
+                </ol>
+              </div>
+            )}
+
             {/* 1. Criar / Definir Nome da Sala */}
             <div className="bg-zinc-950/80 border border-zinc-800 rounded-2xl p-4 space-y-3">
               <label className="block text-xs font-extrabold uppercase tracking-wider text-amber-400">
