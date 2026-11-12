@@ -13,7 +13,10 @@ import {
   Radio,
   Trash2,
   RotateCcw,
-  Sparkles,
+  Users,
+  UserPlus,
+  Pencil,
+  User,
 } from 'lucide-react';
 import { subscribeToRooms } from '../services/hybridStore';
 
@@ -21,10 +24,14 @@ export default function MasterMenuModal({
   isOpen,
   onClose,
   isMaster,
+  currentMasterUser,
   masterPassword,
+  masterUsers = [],
   onUnlockMaster,
   onLockMaster,
   onChangePassword,
+  onSaveMasterUser,
+  onDeleteMasterUser,
   currentRoomId,
   currentRoomName,
   onCreateOrSwitchRoom,
@@ -33,6 +40,7 @@ export default function MasterMenuModal({
   onClearCurrentRoom,
   connStatus,
 }) {
+  const [usernameInput, setUsernameInput] = useState('');
   const [passwordInput, setPasswordInput] = useState('');
   const [loginError, setLoginError] = useState('');
   const [roomsList, setRoomsList] = useState([]);
@@ -42,7 +50,13 @@ export default function MasterMenuModal({
   const [newRoomName, setNewRoomName] = useState(currentRoomName || '');
   const [copied, setCopied] = useState(false);
 
-  // Campos para alterar a senha mestre
+  // Campos para CRUD de Usuários Mestres (Amigos)
+  const [editingUserId, setEditingUserId] = useState(null);
+  const [userFormName, setUserFormName] = useState('');
+  const [userFormPass, setUserFormPass] = useState('');
+  const [copiedUserId, setCopiedUserId] = useState(null);
+
+  // Campos para alterar a senha mestre principal
   const [showChangePass, setShowChangePass] = useState(false);
   const [newPassword, setNewPassword] = useState('');
   const [passSavedMsg, setPassSavedMsg] = useState('');
@@ -75,13 +89,67 @@ export default function MasterMenuModal({
 
   const handleLogin = (e) => {
     e.preventDefault();
-    if (passwordInput.trim() === masterPassword) {
+    const cleanUser = usernameInput.trim();
+    const cleanPass = passwordInput.trim();
+
+    // 1. Verifica se é a Senha Mestre Principal (Dono/Admin)
+    if (cleanPass === masterPassword) {
       setLoginError('');
+      setUsernameInput('');
       setPasswordInput('');
-      onUnlockMaster();
-    } else {
-      setLoginError('Senha Mestre incorreta. Tente novamente!');
+      onUnlockMaster({
+        id: 'owner',
+        name: cleanUser || 'Mestre Principal',
+        isOwner: true,
+      });
+      return;
     }
+
+    // 2. Verifica na lista de Amigos Mestres cadastrados
+    const matchedUser = masterUsers.find((u) => {
+      const samePass = u.password === cleanPass;
+      if (!samePass) return false;
+      if (!cleanUser) return true;
+      return u.username.toLowerCase() === cleanUser.toLowerCase();
+    });
+
+    if (matchedUser) {
+      setLoginError('');
+      setUsernameInput('');
+      setPasswordInput('');
+      onUnlockMaster({
+        id: matchedUser.id,
+        name: matchedUser.username,
+        isOwner: false,
+      });
+      return;
+    }
+
+    setLoginError('Usuário ou Senha Mestre incorretos. Tente novamente!');
+  };
+
+  const handleSaveUserForm = async (e) => {
+    e.preventDefault();
+    if (!userFormName.trim() || !userFormPass.trim()) return;
+    await onSaveMasterUser?.({
+      id: editingUserId,
+      username: userFormName.trim(),
+      password: userFormPass.trim(),
+    });
+    setEditingUserId(null);
+    setUserFormName('');
+    setUserFormPass('');
+  };
+
+  const handleCopyUserCredentials = (u) => {
+    const appBaseUrl =
+      typeof window !== 'undefined'
+        ? `${window.location.origin}${window.location.pathname}`
+        : 'https://resenha-musical.vercel.app';
+    const msg = `🎸 *Acesso Mestre — Resenha Musical*\n\nLink do App: ${appBaseUrl}\n👤 Usuário: *${u.username}*\n🔑 Senha: *${u.password}*\n\nBasta clicar no botão "Mestre" no topo do site e entrar com esses dados para criar sua própria sala!`;
+    navigator.clipboard?.writeText(msg);
+    setCopiedUserId(u.id);
+    setTimeout(() => setCopiedUserId(null), 2500);
   };
 
   const handleCreateRoom = (e) => {
@@ -140,8 +208,8 @@ export default function MasterMenuModal({
               </h2>
               <p className="text-xs text-zinc-400">
                 {isMaster
-                  ? 'Gerencie a sala, envie o link para os amigos ou altere sua senha'
-                  : 'Exclusivo para o anfitrião criar salas e gerenciar cifras'}
+                  ? `Logado como: ${currentMasterUser?.name || 'Mestre'} • Gerencie salas e acessos`
+                  : 'Exclusivo para o anfitrião e amigos mestres cadastrados'}
               </p>
             </div>
           </div>
@@ -154,12 +222,28 @@ export default function MasterMenuModal({
           </button>
         </div>
 
-        {/* TELA DE LOGIN COM SENHA MESTRE */}
+        {/* TELA DE LOGIN COM USUÁRIO E SENHA MESTRE */}
         {!isMaster ? (
           <form onSubmit={handleLogin} className="p-6 space-y-4">
             <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-zinc-400 mb-2">
-                Digite a Senha Mestre
+              <label className="block text-xs font-bold uppercase tracking-wider text-zinc-400 mb-1.5">
+                Usuário / Nome (Opcional para Senha Principal)
+              </label>
+              <div className="relative">
+                <User className="w-5 h-5 text-zinc-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={usernameInput}
+                  onChange={(e) => setUsernameInput(e.target.value)}
+                  placeholder="Ex: joao, carlos (ou deixe em branco se for o dono)"
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl pl-11 pr-4 py-3 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:border-amber-500"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-zinc-400 mb-1.5">
+                Senha de Acesso Mestre *
               </label>
               <div className="relative">
                 <KeyRound className="w-5 h-5 text-zinc-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
@@ -422,7 +506,135 @@ export default function MasterMenuModal({
               </div>
             )}
 
-            {/* 3. Alterar Senha Mestre ou Sair do Modo Mestre */}
+            {/* 3. Gerenciar Usuários Mestres (Amigos que podem criar salas) */}
+            <div className="bg-zinc-950/80 border border-zinc-800 rounded-2xl p-4 space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <label className="text-xs font-extrabold uppercase tracking-wider text-amber-400 flex items-center gap-1.5">
+                  <Users className="w-4 h-4" />
+                  <span>Usuários Mestres para Amigos ({masterUsers.length})</span>
+                </label>
+              </div>
+              <p className="text-xs text-zinc-400">
+                Cadastre um usuário e senha para emprestar o modo Mestre aos seus amigos em outras resenhas:
+              </p>
+
+              <form
+                onSubmit={handleSaveUserForm}
+                className="grid grid-cols-1 sm:grid-cols-12 gap-2"
+              >
+                <input
+                  type="text"
+                  required
+                  value={userFormName}
+                  onChange={(e) => setUserFormName(e.target.value)}
+                  placeholder="Nome / Usuário (ex: carlos)"
+                  className="sm:col-span-5 bg-zinc-900 border border-zinc-700 rounded-xl px-3 py-2 text-xs text-white placeholder:text-zinc-500 focus:outline-none focus:border-amber-500"
+                />
+                <input
+                  type="text"
+                  required
+                  value={userFormPass}
+                  onChange={(e) => setUserFormPass(e.target.value)}
+                  placeholder="Senha (ex: violao10)"
+                  className="sm:col-span-4 bg-zinc-900 border border-zinc-700 rounded-xl px-3 py-2 text-xs text-white placeholder:text-zinc-500 focus:outline-none focus:border-amber-500"
+                />
+                <div className="sm:col-span-3 flex gap-1.5">
+                  <button
+                    type="submit"
+                    className="flex-1 flex items-center justify-center gap-1 px-3 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 font-extrabold text-xs transition cursor-pointer"
+                  >
+                    <UserPlus className="w-3.5 h-3.5" />
+                    <span>{editingUserId ? 'Salvar' : 'Incluir'}</span>
+                  </button>
+                  {editingUserId && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingUserId(null);
+                        setUserFormName('');
+                        setUserFormPass('');
+                      }}
+                      className="px-2.5 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-semibold cursor-pointer"
+                    >
+                      X
+                    </button>
+                  )}
+                </div>
+              </form>
+
+              {masterUsers.length > 0 && (
+                <div className="space-y-1.5 max-h-44 overflow-y-auto pt-2 border-t border-zinc-800/80">
+                  {masterUsers.map((u) => (
+                    <div
+                      key={u.id}
+                      className="flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-zinc-900 border border-zinc-800 text-xs"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <span className="font-bold text-white">{u.username}</span>
+                        <span className="text-zinc-500 mx-1.5">•</span>
+                        <span className="font-mono text-amber-400">
+                          Senha: {u.password}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => handleCopyUserCredentials(u)}
+                          title="Copiar convite com usuário e senha para enviar no WhatsApp"
+                          className="flex items-center gap-1 px-2 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-[11px] font-bold transition cursor-pointer"
+                        >
+                          {copiedUserId === u.id ? (
+                            <>
+                              <Check className="w-3 h-3 text-emerald-400" />
+                              <span className="text-emerald-400">Copiado!</span>
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="w-3 h-3 text-amber-400" />
+                              <span>Copiar</span>
+                            </>
+                          )}
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingUserId(u.id);
+                            setUserFormName(u.username);
+                            setUserFormPass(u.password);
+                          }}
+                          title={`Editar "${u.username}"`}
+                          className="p-1.5 rounded-lg text-zinc-400 hover:text-amber-400 hover:bg-amber-500/15 transition cursor-pointer"
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            if (
+                              !window.confirm(
+                                `Deseja remover o acesso Mestre de "${u.username}"?`
+                              )
+                            ) {
+                              return;
+                            }
+                            await onDeleteMasterUser?.(u.id);
+                          }}
+                          title={`Excluir "${u.username}"`}
+                          className="p-1.5 rounded-lg text-zinc-400 hover:text-red-400 hover:bg-red-500/15 transition cursor-pointer"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* 4. Alterar Senha Mestre Principal ou Sair do Modo Mestre */}
             <div className="border-t border-zinc-800 pt-4 space-y-3">
               {passSavedMsg && (
                 <p className="text-xs text-emerald-400 font-bold">

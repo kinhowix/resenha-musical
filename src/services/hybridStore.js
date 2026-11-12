@@ -120,6 +120,7 @@ function getLocalSettings() {
         masterPassword: DEFAULT_MASTER_PASSWORD,
         activeRoomId: null,
         suggestions: [],
+        masterUsers: [],
       };
     }
     const parsed = JSON.parse(raw);
@@ -128,12 +129,14 @@ function getLocalSettings() {
       activeRoomId:
         parsed.activeRoomId !== undefined ? parsed.activeRoomId : null,
       suggestions: Array.isArray(parsed.suggestions) ? parsed.suggestions : [],
+      masterUsers: Array.isArray(parsed.masterUsers) ? parsed.masterUsers : [],
     };
   } catch {
     return {
       masterPassword: DEFAULT_MASTER_PASSWORD,
       activeRoomId: null,
       suggestions: [],
+      masterUsers: [],
     };
   }
 }
@@ -177,6 +180,7 @@ export function subscribeToAppSettings(callback) {
           activeRoomId:
             data.activeRoomId !== undefined ? data.activeRoomId : null,
           suggestions: Array.isArray(data.suggestions) ? data.suggestions : [],
+          masterUsers: Array.isArray(data.masterUsers) ? data.masterUsers : [],
         };
         localStorage.setItem(LOCAL_SETTINGS_KEY, JSON.stringify(merged));
         callback(merged);
@@ -212,6 +216,88 @@ export async function updateMasterPassword(newPassword) {
       // ignore
     }
   }
+}
+
+/**
+ * Cria ou edita um Usuário Mestre adicional (para amigos que vão usar o app em suas resenhas)
+ */
+export async function saveMasterUser({ id, username, password }) {
+  const cleanName = (username || '').trim();
+  const cleanPass = (password || '').trim();
+  if (!cleanName || !cleanPass) return [];
+
+  const currentSettings = getLocalSettings();
+  const list = Array.isArray(currentSettings.masterUsers)
+    ? [...currentSettings.masterUsers]
+    : [];
+
+  if (id) {
+    const idx = list.findIndex((u) => u.id === id);
+    if (idx >= 0) {
+      list[idx] = {
+        ...list[idx],
+        username: cleanName,
+        password: cleanPass,
+        updatedAt: new Date().toISOString(),
+      };
+    }
+  } else {
+    list.push({
+      id: `muser-${Date.now()}`,
+      username: cleanName,
+      password: cleanPass,
+      createdAt: new Date().toISOString(),
+    });
+  }
+
+  saveLocalSettings({ masterUsers: list });
+
+  if (db) {
+    try {
+      await withTimeout(
+        setDoc(
+          doc(db, 'settings', 'global'),
+          { masterUsers: list, updatedAt: new Date().toISOString() },
+          { merge: true }
+        ),
+        3500
+      );
+    } catch {
+      // ignore
+    }
+  }
+
+  return list;
+}
+
+/**
+ * Exclui um Usuário Mestre adicional
+ */
+export async function deleteMasterUser(userId) {
+  if (!userId) return [];
+  const currentSettings = getLocalSettings();
+  const list = (currentSettings.masterUsers || []).filter(
+    (u) => u.id !== userId
+  );
+
+  saveLocalSettings({ masterUsers: list });
+
+  if (db) {
+    try {
+      await withTimeout(
+        setDoc(
+          doc(db, 'settings', 'global'),
+          { masterUsers: list, updatedAt: new Date().toISOString() },
+          { merge: true }
+        ),
+        3500
+      );
+    } catch {
+      // ignore
+    }
+  }
+
+  return list;
 }
 
 // ==========================================

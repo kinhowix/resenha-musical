@@ -22,6 +22,8 @@ import {
   subscribeToConnectionStatus,
   subscribeToAppSettings,
   updateMasterPassword,
+  saveMasterUser,
+  deleteMasterUser,
   createOrSwitchRoom,
   deleteRoom,
   deleteOldRooms,
@@ -43,6 +45,7 @@ import GuestRoomView from './components/GuestRoomView';
 import MasterMenuModal from './components/MasterMenuModal';
 
 const MASTER_AUTH_STORAGE_KEY = 'resenha_is_master_authenticated_v1';
+const MASTER_USER_STORAGE_KEY = 'resenha_master_user_v1';
 
 export default function App() {
   const [songs, setSongs] = useState([]);
@@ -50,6 +53,7 @@ export default function App() {
     masterPassword: DEFAULT_MASTER_PASSWORD,
     activeRoomId: null,
     suggestions: [],
+    masterUsers: [],
   });
 
   // Identifica a sala pelo link (?sala=nome-da-sala) ou usa a sala ativa do Mestre
@@ -65,6 +69,14 @@ export default function App() {
   // Estado de autenticação do Mestre (persiste no navegador do Mestre)
   const [isMaster, setIsMaster] = useState(() => {
     return localStorage.getItem(MASTER_AUTH_STORAGE_KEY) === 'true';
+  });
+  const [currentMasterUser, setCurrentMasterUser] = useState(() => {
+    try {
+      const raw = localStorage.getItem(MASTER_USER_STORAGE_KEY);
+      return raw ? JSON.parse(raw) : { id: 'owner', name: 'Mestre', isOwner: true };
+    } catch {
+      return { id: 'owner', name: 'Mestre', isOwner: true };
+    }
   });
   const [isMasterModalOpen, setIsMasterModalOpen] = useState(false);
 
@@ -163,21 +175,38 @@ export default function App() {
   }, [appSettings.suggestions, session?.suggestions]);
 
   // Autenticação Mestre
-  const handleUnlockMaster = () => {
+  const handleUnlockMaster = (userObj = { id: 'owner', name: 'Mestre Principal', isOwner: true }) => {
     setIsMaster(true);
+    setCurrentMasterUser(userObj);
     localStorage.setItem(MASTER_AUTH_STORAGE_KEY, 'true');
-    showToast('Modo Mestre desbloqueado! Bem-vindo!');
+    localStorage.setItem(MASTER_USER_STORAGE_KEY, JSON.stringify(userObj));
+    showToast(`Modo Mestre desbloqueado! Bem-vindo, ${userObj.name}!`);
   };
 
   const handleLockMaster = () => {
     setIsMaster(false);
     localStorage.removeItem(MASTER_AUTH_STORAGE_KEY);
+    localStorage.removeItem(MASTER_USER_STORAGE_KEY);
     showToast('Modo Convidado ativado.');
   };
 
   const handleChangeMasterPassword = async (newPass) => {
     await updateMasterPassword(newPass);
     showToast('Senha Mestre alterada com sucesso!');
+  };
+
+  const handleSaveMasterUser = async (userData) => {
+    await saveMasterUser(userData);
+    showToast(
+      userData.id
+        ? `Usuário Mestre "${userData.username}" atualizado!`
+        : `Usuário Mestre "${userData.username}" cadastrado!`
+    );
+  };
+
+  const handleDeleteMasterUser = async (userId) => {
+    await deleteMasterUser(userId);
+    showToast('Usuário Mestre removido.');
   };
 
   // Criar ou alternar Sala pelo Mestre
@@ -694,10 +723,14 @@ export default function App() {
         isOpen={isMasterModalOpen}
         onClose={() => setIsMasterModalOpen(false)}
         isMaster={isMaster}
+        currentMasterUser={currentMasterUser}
         masterPassword={appSettings.masterPassword || DEFAULT_MASTER_PASSWORD}
+        masterUsers={appSettings.masterUsers || []}
         onUnlockMaster={handleUnlockMaster}
         onLockMaster={handleLockMaster}
         onChangePassword={handleChangeMasterPassword}
+        onSaveMasterUser={handleSaveMasterUser}
+        onDeleteMasterUser={handleDeleteMasterUser}
         currentRoomId={hasActiveRoom ? currentRoomId : null}
         currentRoomName={hasActiveRoom ? session?.roomName : ''}
         onCreateOrSwitchRoom={handleCreateOrSwitchRoom}
