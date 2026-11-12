@@ -119,6 +119,7 @@ function getLocalSettings() {
       return {
         masterPassword: DEFAULT_MASTER_PASSWORD,
         activeRoomId: null,
+        suggestions: [],
       };
     }
     const parsed = JSON.parse(raw);
@@ -126,11 +127,13 @@ function getLocalSettings() {
       masterPassword: parsed.masterPassword || DEFAULT_MASTER_PASSWORD,
       activeRoomId:
         parsed.activeRoomId !== undefined ? parsed.activeRoomId : null,
+      suggestions: Array.isArray(parsed.suggestions) ? parsed.suggestions : [],
     };
   } catch {
     return {
       masterPassword: DEFAULT_MASTER_PASSWORD,
       activeRoomId: null,
+      suggestions: [],
     };
   }
 }
@@ -173,6 +176,7 @@ export function subscribeToAppSettings(callback) {
           masterPassword: data.masterPassword || DEFAULT_MASTER_PASSWORD,
           activeRoomId:
             data.activeRoomId !== undefined ? data.activeRoomId : null,
+          suggestions: Array.isArray(data.suggestions) ? data.suggestions : [],
         };
         localStorage.setItem(LOCAL_SETTINGS_KEY, JSON.stringify(merged));
         callback(merged);
@@ -820,34 +824,33 @@ export async function clearRoomQueueAndHistory(roomId) {
 }
 
 /**
- * Convidado envia uma Sugestão de Música que ainda não está na lista do repertório
+ * Convidado envia uma Sugestão de Música que ainda não está na lista do repertório.
+ * Funciona tanto com uma sala aberta quanto antes de qualquer sala ser criada (salvo em settings/global).
  */
 export async function addSongSuggestion(
   { title, artist = '', suggestedBy = 'Amigo da Roda' },
   currentSession,
   roomId
 ) {
-  if (!roomId) return [];
   const cleanTitle = (title || '').trim();
   if (!cleanTitle) return [];
 
   const cleanArtist = (artist || '').trim();
   const cleanUser = (suggestedBy || '').trim() || 'Amigo da Roda';
 
-  let baseSuggestions = Array.isArray(currentSession?.suggestions)
-    ? [...currentSession.suggestions]
+  const currentSettings = getLocalSettings();
+  const globalSuggestions = Array.isArray(currentSettings.suggestions)
+    ? currentSettings.suggestions
+    : [];
+  const sessionSuggestions = Array.isArray(currentSession?.suggestions)
+    ? currentSession.suggestions
     : [];
 
-  if (db) {
-    try {
-      const snap = await withTimeout(getDoc(doc(db, 'sessions', roomId)), 2500);
-      if (snap.exists() && Array.isArray(snap.data()?.suggestions)) {
-        baseSuggestions = [...snap.data().suggestions];
-      }
-    } catch {
-      // fallback
-    }
-  }
+  // Mescla sem duplicar suggestionId
+  const map = new Map();
+  [...globalSuggestions, ...sessionSuggestions].forEach((s) => {
+    if (s && s.suggestionId) map.set(s.suggestionId, s);
+  });
 
   const newSuggestion = {
     suggestionId: `sug-${Date.now()}`,
@@ -857,8 +860,28 @@ export async function addSongSuggestion(
     createdAt: new Date().toISOString(),
   };
 
-  const updated = [newSuggestion, ...baseSuggestions];
-  await updateLiveSession({ suggestions: updated }, roomId);
+  const updated = [newSuggestion, ...Array.from(map.values())];
+  saveLocalSettings({ suggestions: updated });
+
+  if (db) {
+    try {
+      await withTimeout(
+        setDoc(
+          doc(db, 'settings', 'global'),
+          { suggestions: updated, updatedAt: new Date().toISOString() },
+          { merge: true }
+        ),
+        3500
+      );
+    } catch {
+      // ignore
+    }
+  }
+
+  if (roomId) {
+    await updateLiveSession({ suggestions: updated }, roomId);
+  }
+
   return updated;
 }
 
@@ -870,21 +893,69 @@ export async function removeSongSuggestion(
   currentSession,
   roomId
 ) {
-  if (!roomId) return [];
-  const currentList = Array.isArray(currentSession?.suggestions)
+  const currentSettings = getLocalSettings();
+  const globalSuggestions = Array.isArray(currentSettings.suggestions)
+    ? currentSettings.suggestions
+    : [];
+  const sessionSuggestions = Array.isArray(currentSession?.suggestions)
     ? currentSession.suggestions
     : [];
-  const updated = currentList.filter((s) => s.suggestionId !== suggestionId);
-  await updateLiveSession({ suggestions: updated }, roomId);
+
+  const map = new Map();
+  [...globalSuggestions, ...sessionSuggestions].forEach((s) => {
+    if (s && s.suggestionId && s.suggestionId !== suggestionId) {
+      map.set(s.suggestionId, s);
+    }
+  });
+
+  const updated = Array.from(map.values());
+  saveLocalSettings({ suggestions: updated });
+
+  if (db) {
+    try {
+      await withTimeout(
+        setDoc(
+          doc(db, 'settings', 'global'),
+          { suggestions: updated, updatedAt: new Date().toISOString() },
+          { merge: true }
+        ),
+        3500
+      );
+    } catch {
+      // ignore
+    }
+  }
+
+  if (roomId) {
+    await updateLiveSession({ suggestions: updated }, roomId);
+  }
   return updated;
 }
 
 /**
- * Mestre limpa todas as sugestões da sala
+ * Mestre limpa todas as sugestões (globais e da sala ativa)
  */
 export async function clearRoomSuggestions(roomId) {
-  if (!roomId) return;
-  await updateLiveSession({ suggestions: [] }, roomId);
+  saveLocalSettings({ suggestions: [] });
+
+  if (db) {
+    try {
+      await withTimeout(
+        setDoc(
+          doc(db, 'settings', 'global'),
+          { suggestions: [], updatedAt: new Date().toISOString() },
+          { merge: true }
+        ),
+        3500
+      );
+    } catch {
+      // ignore
+    }
+  }
+
+  if (roomId) {
+    await updateLiveSession({ suggestions: [] }, roomId);
+  }
 }
 
 /**

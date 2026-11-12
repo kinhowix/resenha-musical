@@ -49,6 +49,7 @@ export default function App() {
   const [appSettings, setAppSettings] = useState({
     masterPassword: DEFAULT_MASTER_PASSWORD,
     activeRoomId: null,
+    suggestions: [],
   });
 
   // Identifica a sala pelo link (?sala=nome-da-sala) ou usa a sala ativa do Mestre
@@ -145,6 +146,21 @@ export default function App() {
     if (!nextQueueItem) return null;
     return songs.find((s) => s.id === nextQueueItem.songId) || null;
   }, [songs, nextQueueItem]);
+
+  // Sugestões unificadas (funciona antes mesmo de criar sala + durante a sala)
+  const combinedSuggestions = useMemo(() => {
+    const map = new Map();
+    const globalList = Array.isArray(appSettings.suggestions)
+      ? appSettings.suggestions
+      : [];
+    const roomList = Array.isArray(session?.suggestions)
+      ? session.suggestions
+      : [];
+    [...globalList, ...roomList].forEach((s) => {
+      if (s && s.suggestionId) map.set(s.suggestionId, s);
+    });
+    return Array.from(map.values());
+  }, [appSettings.suggestions, session?.suggestions]);
 
   // Autenticação Mestre
   const handleUnlockMaster = () => {
@@ -501,7 +517,7 @@ export default function App() {
               >
                 <Disc3 className="w-3.5 h-3.5 shrink-0" />
                 <span>Ranking</span>
-                {(session?.queue?.length || 0) + (session?.suggestions?.length || 0) > 0 && (
+                {(session?.queue?.length || 0) + combinedSuggestions.length > 0 && (
                   <span
                     className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
                       activeTab === 'jukebox'
@@ -509,7 +525,7 @@ export default function App() {
                         : 'bg-amber-500 text-zinc-950'
                     }`}
                   >
-                    {(session?.queue?.length || 0) + (session?.suggestions?.length || 0)}
+                    {(session?.queue?.length || 0) + combinedSuggestions.length}
                   </span>
                 )}
               </button>
@@ -582,7 +598,7 @@ export default function App() {
             currentSong={currentSong}
             transpose={effectiveTranspose}
             queue={session?.queue || []}
-            suggestions={session?.suggestions || []}
+            suggestions={combinedSuggestions}
             onVoteSong={handleVoteOrAddSong}
             onSuggestSong={handleSuggestSong}
             onOpenMasterLogin={() => setIsMasterModalOpen(true)}
@@ -636,7 +652,7 @@ export default function App() {
                 roomName={session?.roomName || 'Nenhuma Sala Ativa'}
                 songs={songs}
                 queue={session?.queue || []}
-                suggestions={session?.suggestions || []}
+                suggestions={combinedSuggestions}
                 currentSong={currentSong}
                 onPlayFromQueue={handlePlayFromQueue}
                 onRemoveFromQueue={handleRemoveFromQueue}
@@ -667,6 +683,10 @@ export default function App() {
         onClose={() => setIsModalOpen(false)}
         onSave={handleSaveSong}
         initialData={editingSong}
+        existingSongs={songs}
+        onSwitchToEditSong={(songToEdit) => {
+          setEditingSong(songToEdit);
+        }}
       />
 
       {/* Modal de Acesso Mestre / Criação de Sala & Link para Amigos */}

@@ -26,6 +26,16 @@ import FloatingScrollControl from './FloatingScrollControl';
 const VOTER_NAME_KEY = 'resenha_guest_name_v1';
 const VOTED_SONGS_SESSION_KEY = 'resenha_voted_songs_v1';
 
+function normalizeGuestText(str = '') {
+  return str
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 export default function GuestRoomView({
   hasActiveRoom = true,
   roomName,
@@ -38,8 +48,9 @@ export default function GuestRoomView({
   onSuggestSong,
   onOpenMasterLogin,
 }) {
-  // Aba super simples: 'choose' (Escolher Música & Ranking) ou 'lyrics' (Ver Música Tocando Agora)
+  // Aba super simples: 'choose' (Escolher Música & Ranking) ou 'lyrics' (Ver Música Tocando Agora / Consultada)
   const [guestSection, setGuestSection] = useState('choose');
+  const [previewSongId, setPreviewSongId] = useState(null);
   const [search, setSearch] = useState('');
   const [guestName, setGuestName] = useState(
     () => localStorage.getItem(VOTER_NAME_KEY) || ''
@@ -109,9 +120,23 @@ export default function GuestRoomView({
     }
   };
 
+  const activeDisplaySong = useMemo(() => {
+    if (previewSongId) {
+      return songs.find((s) => s.id === previewSongId) || currentSong || songs[0] || null;
+    }
+    return currentSong || songs[0] || null;
+  }, [previewSongId, songs, currentSong]);
+
+  const activeTranspose =
+    previewSongId && previewSongId !== currentSong?.id ? 0 : transpose;
+
   const parsedLines = useMemo(() => {
-    return parseChordProSong(currentSong?.content || '', transpose, isSimplified);
-  }, [currentSong?.content, transpose, isSimplified]);
+    return parseChordProSong(
+      activeDisplaySong?.content || '',
+      activeTranspose,
+      isSimplified
+    );
+  }, [activeDisplaySong?.content, activeTranspose, isSimplified]);
 
   const uniqueChords = useMemo(() => {
     return extractUniqueChords(parsedLines);
@@ -119,11 +144,11 @@ export default function GuestRoomView({
 
   const currentKey = useMemo(() => {
     const transposedKey = transposeChordSymbol(
-      currentSong?.originalKey || 'C',
-      transpose
+      activeDisplaySong?.originalKey || 'C',
+      activeTranspose
     );
     return isSimplified ? simplifyChordSymbol(transposedKey) : transposedKey;
-  }, [currentSong?.originalKey, transpose, isSimplified]);
+  }, [activeDisplaySong?.originalKey, activeTranspose, isSimplified]);
 
   const filteredSongs = useMemo(() => {
     return songs.filter(
@@ -134,118 +159,267 @@ export default function GuestRoomView({
     );
   }, [songs, search]);
 
-  if (!hasActiveRoom) {
-    return (
-      <div className="max-w-xl mx-auto my-12 bg-gradient-to-br from-amber-500/15 via-zinc-900 to-zinc-900 border border-amber-500/30 rounded-3xl p-8 text-center shadow-2xl space-y-5">
-        <div className="w-16 h-16 mx-auto rounded-2xl bg-amber-500 text-zinc-950 flex items-center justify-center shadow-lg shadow-amber-500/20">
-          <Guitar className="w-9 h-9 stroke-[2.2]" />
-        </div>
+  // Verifica 100% localmente (zero requisições) se a música que o amigo está digitando na sugestão já existe
+  const suggestionMatchesInRepertoire = useMemo(() => {
+    const normSug = normalizeGuestText(sugTitle);
+    if (!normSug || normSug.length < 3) return [];
+    return songs.filter((s) => {
+      const normTitle = normalizeGuestText(s.title);
+      return (
+        normTitle === normSug ||
+        normTitle.includes(normSug) ||
+        normSug.includes(normTitle)
+      );
+    });
+  }, [sugTitle, songs]);
 
-        <div className="space-y-2">
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/20 text-amber-300 text-xs font-extrabold uppercase tracking-wider">
-            Aguardando Início
-          </span>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-white">
-            A Resenha ainda não começou!
-          </h1>
-          <p className="text-sm text-zinc-300 leading-relaxed">
-            Nenhuma sala está aberta neste momento. Assim que o anfitrião criar a sala do encontro de hoje, esta tela abrirá automaticamente!
+  const renderSuggestionBox = () => (
+    <div className="bg-gradient-to-br from-zinc-900 via-zinc-900 to-amber-500/10 border border-amber-500/30 rounded-3xl p-5 sm:p-6 shadow-lg">
+      <div className="flex items-center gap-3 mb-3">
+        <div className="p-2.5 rounded-2xl bg-amber-500/15 text-amber-400 shrink-0">
+          <MessageSquarePlus className="w-6 h-6" />
+        </div>
+        <div>
+          <h2 className="text-lg sm:text-xl font-extrabold text-white">
+            Não achou sua música? Envie uma Sugestão!
+          </h2>
+          <p className="text-xs sm:text-sm text-zinc-400">
+            {hasActiveRoom
+              ? 'Peça qualquer música para o Mestre cadastrar na roda!'
+              : 'Mesmo antes da sala abrir, você já pode deixar sugestões de músicas para o Mestre preparar!'}
           </p>
         </div>
-
-        {onOpenMasterLogin && (
-          <div className="pt-3 border-t border-zinc-800/80">
-            <button
-              type="button"
-              onClick={onOpenMasterLogin}
-              className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-2xl bg-zinc-800 hover:bg-zinc-700 text-amber-400 text-xs sm:text-sm font-extrabold transition cursor-pointer"
-            >
-              Sou o Anfitrião (Criar Sala com Senha Mestre)
-            </button>
-          </div>
-        )}
       </div>
-    );
-  }
+
+      <form
+        onSubmit={handleSendSuggestion}
+        className="grid grid-cols-1 sm:grid-cols-12 gap-3 mt-4"
+      >
+        <div className="sm:col-span-5">
+          <input
+            type="text"
+            required
+            value={sugTitle}
+            onChange={(e) => setSugTitle(e.target.value)}
+            placeholder="Nome da música (ex: Boate Azul) *"
+            className="w-full bg-zinc-950 border border-zinc-800 rounded-2xl px-4 py-3 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:border-amber-500"
+          />
+        </div>
+
+        <div className="sm:col-span-4">
+          <input
+            type="text"
+            value={sugArtist}
+            onChange={(e) => setSugArtist(e.target.value)}
+            placeholder="Cantor / Banda (opcional)"
+            className="w-full bg-zinc-950 border border-zinc-800 rounded-2xl px-4 py-3 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:border-amber-500"
+          />
+        </div>
+
+        <div className="sm:col-span-3">
+          <button
+            type="submit"
+            className="w-full h-full flex items-center justify-center gap-2 py-3 px-4 rounded-2xl bg-amber-500 hover:bg-amber-400 active:scale-95 text-zinc-950 font-extrabold text-sm shadow-lg shadow-amber-500/20 transition cursor-pointer"
+          >
+            <Send className="w-4 h-4" />
+            <span>Enviar Sugestão</span>
+          </button>
+        </div>
+      </form>
+
+      {/* Aviso instantâneo local caso a música digitada já exista no repertório */}
+      {suggestionMatchesInRepertoire.length > 0 && (
+        <div className="mt-3 p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 space-y-2">
+          <p className="text-xs sm:text-sm font-bold text-emerald-300">
+            🎉 Boa notícia! Encontramos música(s) com esse nome que já estão no repertório:
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {suggestionMatchesInRepertoire.slice(0, 3).map((match) => (
+              <div
+                key={match.id}
+                className="flex items-center gap-2 bg-zinc-950/90 border border-emerald-500/30 rounded-xl px-3 py-1.5 text-xs text-white"
+              >
+                <span className="font-bold text-emerald-400">{match.title}</span>
+                <span className="text-zinc-400">— {match.artist}</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPreviewSongId(match.id);
+                    setGuestSection('lyrics');
+                  }}
+                  className="ml-1 px-2 py-0.5 rounded-lg bg-emerald-500 text-zinc-950 font-extrabold hover:bg-emerald-400 transition cursor-pointer"
+                >
+                  Ver Letra
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {sugSent && (
+        <div className="mt-3 px-4 py-2.5 rounded-xl bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 text-xs sm:text-sm font-bold">
+          ✅ Sugestão enviada para o Mestre da Roda!
+        </div>
+      )}
+
+      {suggestions.length > 0 && (
+        <div className="mt-4 pt-4 border-t border-zinc-800/80">
+          <span className="block text-xs font-bold uppercase tracking-wider text-zinc-400 mb-2">
+            Últimas sugestões enviadas pela galera ({suggestions.length}):
+          </span>
+          <div className="flex flex-wrap gap-2">
+            {suggestions.slice(0, 8).map((s) => (
+              <span
+                key={s.suggestionId}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-zinc-300"
+              >
+                <strong className="text-amber-400">{s.title}</strong>
+                {s.artist && <span>— {s.artist}</span>}
+                <span className="text-zinc-500">({s.suggestedBy})</span>
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
 
   return (
     <div className="space-y-6 pb-32">
-      {/* Banner de Boas-Vindas da Sala */}
-      <div className="bg-gradient-to-br from-amber-500/20 via-zinc-900 to-zinc-900 border border-amber-500/40 rounded-3xl p-5 sm:p-6 shadow-xl">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500 text-zinc-950 text-xs font-extrabold uppercase tracking-wider mb-2">
-              <Sparkles className="w-3.5 h-3.5" /> Sala Ao Vivo
-            </span>
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
-              {roomName || 'Resenha Musical'}
-            </h1>
-            <p className="text-sm text-zinc-300 mt-1">
-              Escolha as próximas músicas para subir no ranking ou acompanhe a letra do que está tocando!
-            </p>
-          </div>
-
-          {/* Campo simples para o convidado colocar o nome se quiser */}
-          <div className="bg-zinc-950/80 border border-zinc-800 rounded-2xl p-3 sm:w-64 shrink-0">
-            <label className="block text-[11px] font-bold uppercase tracking-wider text-amber-400 mb-1">
-              Seu Nome (Opcional):
-            </label>
-            <input
-              type="text"
-              value={guestName}
-              onChange={(e) => handleNameChange(e.target.value)}
-              placeholder="Ex: Tio João, Ana..."
-              className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-3 py-2 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:border-amber-500"
-            />
-          </div>
-        </div>
-
-        {/* Cartão Destaque: TOCANDO AGORA */}
-        {currentSong && (
-          <div className="mt-5 bg-zinc-950/90 border border-amber-500/50 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="flex items-center gap-3.5">
-              <div className="w-12 h-12 rounded-2xl bg-amber-500 text-zinc-950 flex items-center justify-center shrink-0 shadow-lg shadow-amber-500/20">
-                <Disc3
-                  className="w-7 h-7 animate-spin"
-                  style={{ animationDuration: '6s' }}
-                />
+      {/* Banner Superior: Sala Ao Vivo OU Aguardando Início */}
+      {!hasActiveRoom ? (
+        <div className="bg-gradient-to-br from-amber-500/15 via-zinc-900 to-zinc-900 border border-amber-500/30 rounded-3xl p-5 sm:p-7 shadow-2xl space-y-5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-start gap-4">
+              <div className="w-14 h-14 rounded-2xl bg-amber-500 text-zinc-950 flex items-center justify-center shadow-lg shadow-amber-500/20 shrink-0">
+                <Guitar className="w-8 h-8 stroke-[2.2]" />
               </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-extrabold uppercase tracking-wider text-amber-400">
-                    Tocando Agora na Roda
-                  </span>
-                  <span className="px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-300 font-mono text-xs font-bold">
-                    Tom: {currentKey}
-                  </span>
-                </div>
-                <h2 className="text-lg sm:text-xl font-extrabold text-white">
-                  {currentSong.title}
-                </h2>
-                <p className="text-xs sm:text-sm text-zinc-400">
-                  {currentSong.artist}
+              <div className="space-y-1">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/20 text-amber-300 text-xs font-extrabold uppercase tracking-wider">
+                  Aguardando Início da Sala
+                </span>
+                <h1 className="text-xl sm:text-3xl font-extrabold text-white">
+                  A Resenha ainda não começou!
+                </h1>
+                <p className="text-xs sm:text-sm text-zinc-300 leading-relaxed max-w-2xl">
+                  A sala de votação ao vivo ainda não foi aberta pelo anfitrião, mas você já pode{' '}
+                  <strong className="text-amber-400">consultar as músicas do repertório</strong> abaixo e{' '}
+                  <strong className="text-amber-400">enviar sugestões</strong> de músicas novas para o Mestre!
                 </p>
               </div>
             </div>
 
-            <button
-              onClick={() =>
-                setGuestSection(guestSection === 'lyrics' ? 'choose' : 'lyrics')
-              }
-              className={`py-3 px-5 rounded-xl font-extrabold text-sm transition flex items-center justify-center gap-2 cursor-pointer shrink-0 ${
-                guestSection === 'lyrics'
-                  ? 'bg-zinc-800 text-white hover:bg-zinc-700'
-                  : 'bg-amber-500 hover:bg-amber-400 text-zinc-950 shadow-lg shadow-amber-500/25'
-              }`}
-            >
-              <Music className="w-4 h-4" />
-              {guestSection === 'lyrics'
-                ? 'Voltar para Escolher Músicas'
-                : 'Ver Letra e Acordes Agora'}
-            </button>
+            {/* Campo simples para o convidado colocar o nome se quiser */}
+            <div className="bg-zinc-950/80 border border-zinc-800 rounded-2xl p-3 sm:w-64 shrink-0">
+              <label className="block text-[11px] font-bold uppercase tracking-wider text-amber-400 mb-1">
+                Seu Nome (Opcional):
+              </label>
+              <input
+                type="text"
+                value={guestName}
+                onChange={(e) => handleNameChange(e.target.value)}
+                placeholder="Ex: Tio João, Ana..."
+                className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-3 py-2 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:border-amber-500"
+              />
+            </div>
           </div>
-        )}
-      </div>
+
+          {onOpenMasterLogin && (
+            <div className="pt-3 border-t border-zinc-800/80 flex flex-wrap items-center justify-between gap-2">
+              <span className="text-xs text-zinc-400">
+                Assim que o anfitrião criar a sala, a votação ao vivo aparecerá automaticamente aqui.
+              </span>
+              <button
+                type="button"
+                onClick={onOpenMasterLogin}
+                className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-amber-400 text-xs font-extrabold transition cursor-pointer"
+              >
+                Sou o Anfitrião (Criar Sala com Senha Mestre)
+              </button>
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="bg-gradient-to-br from-amber-500/20 via-zinc-900 to-zinc-900 border border-amber-500/40 rounded-3xl p-5 sm:p-6 shadow-xl">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500 text-zinc-950 text-xs font-extrabold uppercase tracking-wider mb-2">
+                <Sparkles className="w-3.5 h-3.5" /> Sala Ao Vivo
+              </span>
+              <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
+                {roomName || 'Resenha Musical'}
+              </h1>
+              <p className="text-sm text-zinc-300 mt-1">
+                Escolha as próximas músicas para subir no ranking ou acompanhe a letra do que está tocando!
+              </p>
+            </div>
+
+            {/* Campo simples para o convidado colocar o nome se quiser */}
+            <div className="bg-zinc-950/80 border border-zinc-800 rounded-2xl p-3 sm:w-64 shrink-0">
+              <label className="block text-[11px] font-bold uppercase tracking-wider text-amber-400 mb-1">
+                Seu Nome (Opcional):
+              </label>
+              <input
+                type="text"
+                value={guestName}
+                onChange={(e) => handleNameChange(e.target.value)}
+                placeholder="Ex: Tio João, Ana..."
+                className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-3 py-2 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:border-amber-500"
+              />
+            </div>
+          </div>
+
+          {/* Cartão Destaque: TOCANDO AGORA */}
+          {currentSong && (
+            <div className="mt-5 bg-zinc-950/90 border border-amber-500/50 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="flex items-center gap-3.5">
+                <div className="w-12 h-12 rounded-2xl bg-amber-500 text-zinc-950 flex items-center justify-center shrink-0 shadow-lg shadow-amber-500/20">
+                  <Disc3
+                    className="w-7 h-7 animate-spin"
+                    style={{ animationDuration: '6s' }}
+                  />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-extrabold uppercase tracking-wider text-amber-400">
+                      Tocando Agora na Roda
+                    </span>
+                    <span className="px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-300 font-mono text-xs font-bold">
+                      Tom: {currentKey}
+                    </span>
+                  </div>
+                  <h2 className="text-lg sm:text-xl font-extrabold text-white">
+                    {currentSong.title}
+                  </h2>
+                  <p className="text-xs sm:text-sm text-zinc-400">
+                    {currentSong.artist}
+                  </p>
+                </div>
+              </div>
+
+              <button
+                onClick={() => {
+                  setPreviewSongId(null);
+                  setGuestSection(
+                    guestSection === 'lyrics' ? 'choose' : 'lyrics'
+                  );
+                }}
+                className={`py-3 px-5 rounded-xl font-extrabold text-sm transition flex items-center justify-center gap-2 cursor-pointer shrink-0 ${
+                  guestSection === 'lyrics' && !previewSongId
+                    ? 'bg-zinc-800 text-white hover:bg-zinc-700'
+                    : 'bg-amber-500 hover:bg-amber-400 text-zinc-950 shadow-lg shadow-amber-500/25'
+                }`}
+              >
+                <Music className="w-4 h-4" />
+                {guestSection === 'lyrics' && !previewSongId
+                  ? 'Voltar para Escolher Músicas'
+                  : 'Ver Letra e Acordes Agora'}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Dois Botões Gigantes e Intuitivos para Alternar Visão */}
       <div className="grid grid-cols-2 gap-3">
@@ -258,11 +432,18 @@ export default function GuestRoomView({
           }`}
         >
           <ThumbsUp className="w-5 h-5" />
-          <span>Escolher Música ({songs.length})</span>
+          <span>
+            {hasActiveRoom
+              ? `Escolher Música (${songs.length})`
+              : `Repertório & Sugestões (${songs.length})`}
+          </span>
         </button>
 
         <button
-          onClick={() => setGuestSection('lyrics')}
+          onClick={() => {
+            if (hasActiveRoom) setPreviewSongId(null);
+            setGuestSection('lyrics');
+          }}
           className={`py-3.5 px-4 rounded-2xl font-extrabold text-sm sm:text-base flex items-center justify-center gap-2 border transition cursor-pointer ${
             guestSection === 'lyrics'
               ? 'bg-amber-500 text-zinc-950 border-amber-400 shadow-lg shadow-amber-500/20'
@@ -270,12 +451,16 @@ export default function GuestRoomView({
           }`}
         >
           <Music className="w-5 h-5" />
-          <span>Cifra Tocando Agora</span>
+          <span>
+            {hasActiveRoom && !previewSongId
+              ? 'Cifra Tocando Agora'
+              : 'Ver Letra / Cifra'}
+          </span>
         </button>
       </div>
 
-      {/* VISÃO 1: CIFRA E LETRA DA MÚSICA TOCANDO AGORA */}
-      {guestSection === 'lyrics' && currentSong && (
+      {/* VISÃO 1: CIFRA E LETRA DA MÚSICA TOCANDO AGORA OU CONSULTADA */}
+      {guestSection === 'lyrics' && activeDisplaySong && (
         <div className="space-y-4">
           {/* Painel de Diagramas de Acordes para os Convidados (Oculto se estiver no Modo Só Letra) */}
           {!lyricsOnly && showDiagrams && uniqueChords.length > 0 && (
@@ -310,10 +495,12 @@ export default function GuestRoomView({
             <div className="flex flex-wrap items-center justify-between gap-3 pb-4 mb-5 border-b border-zinc-800">
               <div>
                 <span className="text-xs uppercase font-bold text-amber-400">
-                  Acompanhando ao vivo
+                  {hasActiveRoom && !previewSongId
+                    ? 'Acompanhando ao vivo'
+                    : 'Visualizando música do repertório'}
                 </span>
                 <h3 className="text-xl font-extrabold text-white">
-                  {currentSong.title} — {currentSong.artist}
+                  {activeDisplaySong.title} — {activeDisplaySong.artist}
                 </h3>
               </div>
 
@@ -461,113 +648,122 @@ export default function GuestRoomView({
         </div>
       )}
 
-      {/* VISÃO 2: RANKING DA FILA + ESCOLHER MÚSICAS */}
+      {/* VISÃO 2: RANKING DA FILA + ESCOLHER MÚSICAS + SUGESTÕES */}
       {guestSection === 'choose' && (
         <div className="space-y-6">
-          {/* RANKING DAS PRÓXIMAS MÚSICAS (Votação Ao Vivo) */}
-          <div className="bg-zinc-900/90 border border-zinc-800 rounded-3xl p-5 sm:p-6 shadow-lg">
-            <div className="flex items-center justify-between gap-2 mb-4">
-              <div className="flex items-center gap-2.5">
-                <div className="p-2.5 rounded-2xl bg-amber-500/15 text-amber-400">
-                  <Trophy className="w-6 h-6" />
+          {/* Quando não há sala ativa, exibe a Caixa de Sugestões logo no topo para os amigos já irem sugerindo */}
+          {!hasActiveRoom && renderSuggestionBox()}
+
+          {/* RANKING DAS PRÓXIMAS MÚSICAS (Votação Ao Vivo - apenas quando há sala aberta) */}
+          {hasActiveRoom && (
+            <div className="bg-zinc-900/90 border border-zinc-800 rounded-3xl p-5 sm:p-6 shadow-lg">
+              <div className="flex items-center justify-between gap-2 mb-4">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2.5 rounded-2xl bg-amber-500/15 text-amber-400">
+                    <Trophy className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h2 className="text-lg sm:text-xl font-extrabold text-white">
+                      Ranking das Próximas Músicas ({queue.length})
+                    </h2>
+                    <p className="text-xs sm:text-sm text-zinc-400">
+                      As músicas mais votadas pelos amigos sobem para o topo da fila!
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <h2 className="text-lg sm:text-xl font-extrabold text-white">
-                    Ranking das Próximas Músicas ({queue.length})
-                  </h2>
-                  <p className="text-xs sm:text-sm text-zinc-400">
-                    As músicas mais votadas pelos amigos sobem para o topo da fila!
+              </div>
+
+              {queue.length === 0 ? (
+                <div className="text-center py-8 bg-zinc-950/50 border border-dashed border-zinc-800 rounded-2xl text-zinc-400">
+                  <p className="text-base font-semibold">
+                    Nenhuma música na fila ainda!
+                  </p>
+                  <p className="text-xs mt-1">
+                    Toque em &ldquo;Escolher&rdquo; na lista abaixo para pedir a próxima música.
                   </p>
                 </div>
-              </div>
-            </div>
+              ) : (
+                <div className="space-y-3">
+                  {queue.map((item, idx) => {
+                    const song = songs.find((s) => s.id === item.songId);
+                    if (!song) return null;
+                    const votes = item.votes ?? 1;
+                    const votersList = Array.isArray(item.voters)
+                      ? item.voters.join(', ')
+                      : item.requestedBy || 'Galera';
 
-            {queue.length === 0 ? (
-              <div className="text-center py-8 bg-zinc-950/50 border border-dashed border-zinc-800 rounded-2xl text-zinc-400">
-                <p className="text-base font-semibold">
-                  Nenhuma música na fila ainda!
-                </p>
-                <p className="text-xs mt-1">
-                  Toque em &ldquo;Escolher&rdquo; na lista abaixo para pedir a próxima música.
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {queue.map((item, idx) => {
-                  const song = songs.find((s) => s.id === item.songId);
-                  if (!song) return null;
-                  const votes = item.votes ?? 1;
-                  const votersList = Array.isArray(item.voters)
-                    ? item.voters.join(', ')
-                    : item.requestedBy || 'Galera';
-
-                  return (
-                    <div
-                      key={item.queueId}
-                      className={`flex items-center justify-between gap-3 rounded-2xl p-3.5 sm:p-4 border transition ${
-                        idx === 0
-                          ? 'bg-amber-500/15 border-amber-500/50 shadow-md'
-                          : 'bg-zinc-950/80 border-zinc-800'
-                      }`}
-                    >
-                      <div className="flex items-center gap-3.5 min-w-0">
-                        <div
-                          className={`w-9 h-9 rounded-xl font-mono text-sm font-extrabold flex items-center justify-center shrink-0 ${
-                            idx === 0
-                              ? 'bg-amber-500 text-zinc-950 shadow'
-                              : idx === 1
-                              ? 'bg-zinc-700 text-white'
-                              : 'bg-zinc-800 text-zinc-400'
-                          }`}
-                        >
-                          {idx + 1}º
-                        </div>
-
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2">
-                            <h3 className="font-extrabold text-white text-base truncate">
-                              {song.title}
-                            </h3>
-                            {idx === 0 && (
-                              <span className="hidden sm:inline-block px-2 py-0.5 rounded-full bg-amber-500 text-zinc-950 text-[10px] font-extrabold uppercase">
-                                Próxima a Tocar!
-                              </span>
-                            )}
-                          </div>
-                          <p className="text-xs text-zinc-300 truncate">
-                            {song.artist} •{' '}
-                            <span className="text-amber-400">
-                              Escolhida por: {votersList}
-                            </span>
-                          </p>
-                        </div>
-                      </div>
-
-                      {/* Botão de Somar +1 Ponto direto no Ranking */}
-                      <button
-                        onClick={() => handleVote(song.id)}
-                        className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 active:scale-95 text-zinc-950 font-extrabold text-xs sm:text-sm shadow transition cursor-pointer shrink-0"
+                    return (
+                      <div
+                        key={item.queueId}
+                        className={`flex items-center justify-between gap-3 rounded-2xl p-3.5 sm:p-4 border transition ${
+                          idx === 0
+                            ? 'bg-amber-500/15 border-amber-500/50 shadow-md'
+                            : 'bg-zinc-950/80 border-zinc-800'
+                        }`}
                       >
-                        <ThumbsUp className="w-4 h-4 fill-current" />
-                        <span>{votes} {votes === 1 ? 'ponto' : 'pontos'}</span>
-                        <span className="bg-zinc-950/20 px-1.5 py-0.5 rounded text-[11px]">
-                          +1
-                        </span>
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
+                        <div className="flex items-center gap-3.5 min-w-0">
+                          <div
+                            className={`w-9 h-9 rounded-xl font-mono text-sm font-extrabold flex items-center justify-center shrink-0 ${
+                              idx === 0
+                                ? 'bg-amber-500 text-zinc-950 shadow'
+                                : idx === 1
+                                ? 'bg-zinc-700 text-white'
+                                : 'bg-zinc-800 text-zinc-400'
+                            }`}
+                          >
+                            {idx + 1}º
+                          </div>
 
-          {/* LISTA COMPLETA DE MÚSICAS DISPONÍVEIS PARA ESCOLHER */}
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                              <h3 className="font-extrabold text-white text-base truncate">
+                                {song.title}
+                              </h3>
+                              {idx === 0 && (
+                                <span className="hidden sm:inline-block px-2 py-0.5 rounded-full bg-amber-500 text-zinc-950 text-[10px] font-extrabold uppercase">
+                                  Próxima a Tocar!
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-xs text-zinc-300 truncate">
+                              {song.artist} •{' '}
+                              <span className="text-amber-400">
+                                Escolhida por: {votersList}
+                              </span>
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Botão de Somar +1 Ponto direto no Ranking */}
+                        <button
+                          onClick={() => handleVote(song.id)}
+                          className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 active:scale-95 text-zinc-950 font-extrabold text-xs sm:text-sm shadow transition cursor-pointer shrink-0"
+                        >
+                          <ThumbsUp className="w-4 h-4 fill-current" />
+                          <span>{votes} {votes === 1 ? 'ponto' : 'pontos'}</span>
+                          <span className="bg-zinc-950/20 px-1.5 py-0.5 rounded text-[11px]">
+                            +1
+                          </span>
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* LISTA COMPLETA DE MÚSICAS DISPONÍVEIS NO REPERTÓRIO */}
           <div className="bg-zinc-900/70 border border-zinc-800 rounded-3xl p-5 sm:p-6">
             <h2 className="text-lg sm:text-xl font-extrabold text-white mb-1">
-              Músicas Disponíveis para Escolher
+              {hasActiveRoom
+                ? 'Músicas Disponíveis para Escolher'
+                : `Músicas Já Cadastradas no Repertório (${songs.length})`}
             </h2>
             <p className="text-xs sm:text-sm text-zinc-400 mb-4">
-              Toque no botão ao lado da música para colocar na fila ou somar +1 ponto!
+              {hasActiveRoom
+                ? 'Toque no botão ao lado da música para colocar na fila ou somar +1 ponto!'
+                : 'Consulte abaixo todas as músicas que já estão prontas no repertório do Mestre. Se sentir falta de alguma, envie sua sugestão acima!'}
             </p>
 
             {/* Busca grande e fácil de usar */}
@@ -577,15 +773,18 @@ export default function GuestRoomView({
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Procurar música ou cantor..."
+                placeholder="Procurar música ou cantor no repertório..."
                 className="w-full bg-zinc-950 border border-zinc-800 rounded-2xl pl-12 pr-4 py-3.5 text-base text-white placeholder:text-zinc-500 focus:outline-none focus:border-amber-500"
               />
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
               {filteredSongs.map((song) => {
-                const isCurrentlyPlaying = currentSong?.id === song.id;
-                const queueEntry = queue.find((q) => q.songId === song.id);
+                const isCurrentlyPlaying =
+                  hasActiveRoom && currentSong?.id === song.id;
+                const queueEntry = hasActiveRoom
+                  ? queue.find((q) => q.songId === song.id)
+                  : null;
                 const currentPoints = queueEntry ? queueEntry.votes ?? 1 : 0;
 
                 return (
@@ -611,7 +810,7 @@ export default function GuestRoomView({
                         )}
                       </div>
                       <p className="text-xs sm:text-sm text-zinc-400 truncate">
-                        {song.artist}
+                        {song.artist} • Tom: {song.originalKey}
                       </p>
                       {currentPoints > 0 && (
                         <span className="inline-block mt-1 text-xs font-bold text-amber-400">
@@ -621,103 +820,41 @@ export default function GuestRoomView({
                       )}
                     </div>
 
-                    <button
-                      onClick={() => handleVote(song.id)}
-                      className={`px-4 py-3 rounded-xl font-extrabold text-xs sm:text-sm flex items-center gap-2 transition active:scale-95 cursor-pointer shrink-0 ${
-                        queueEntry
-                          ? 'bg-amber-500/20 hover:bg-amber-500 text-amber-300 hover:text-zinc-950 border border-amber-500/40'
-                          : 'bg-amber-500 hover:bg-amber-400 text-zinc-950 shadow-md shadow-amber-500/10'
-                      }`}
-                    >
-                      <ThumbsUp className="w-4 h-4" />
-                      <span>
-                        {queueEntry ? `Votar (+1)` : 'Escolher'}
-                      </span>
-                    </button>
+                    {hasActiveRoom ? (
+                      <button
+                        onClick={() => handleVote(song.id)}
+                        className={`px-4 py-3 rounded-xl font-extrabold text-xs sm:text-sm flex items-center gap-2 transition active:scale-95 cursor-pointer shrink-0 ${
+                          queueEntry
+                            ? 'bg-amber-500/20 hover:bg-amber-500 text-amber-300 hover:text-zinc-950 border border-amber-500/40'
+                            : 'bg-amber-500 hover:bg-amber-400 text-zinc-950 shadow-md shadow-amber-500/10'
+                        }`}
+                      >
+                        <ThumbsUp className="w-4 h-4" />
+                        <span>
+                          {queueEntry ? `Votar (+1)` : 'Escolher'}
+                        </span>
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPreviewSongId(song.id);
+                          setGuestSection('lyrics');
+                        }}
+                        className="px-3.5 py-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-amber-400 font-bold text-xs flex items-center gap-1.5 transition cursor-pointer shrink-0"
+                      >
+                        <Music className="w-3.5 h-3.5" />
+                        <span>Ver Letra</span>
+                      </button>
+                    )}
                   </div>
                 );
               })}
             </div>
           </div>
 
-          {/* CAIXINHA DE SUGESTÕES PARA O MESTRE */}
-          <div className="bg-gradient-to-br from-zinc-900 via-zinc-900 to-amber-500/10 border border-amber-500/30 rounded-3xl p-5 sm:p-6 shadow-lg">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="p-2.5 rounded-2xl bg-amber-500/15 text-amber-400 shrink-0">
-                <MessageSquarePlus className="w-6 h-6" />
-              </div>
-              <div>
-                <h2 className="text-lg sm:text-xl font-extrabold text-white">
-                  Não achou sua música? Envie uma Sugestão!
-                </h2>
-                <p className="text-xs sm:text-sm text-zinc-400">
-                  Peça qualquer música para o Mestre cadastrar na roda!
-                </p>
-              </div>
-            </div>
-
-            <form
-              onSubmit={handleSendSuggestion}
-              className="grid grid-cols-1 sm:grid-cols-12 gap-3 mt-4"
-            >
-              <div className="sm:col-span-5">
-                <input
-                  type="text"
-                  required
-                  value={sugTitle}
-                  onChange={(e) => setSugTitle(e.target.value)}
-                  placeholder="Nome da música (ex: Boate Azul) *"
-                  className="w-full bg-zinc-950 border border-zinc-800 rounded-2xl px-4 py-3 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:border-amber-500"
-                />
-              </div>
-
-              <div className="sm:col-span-4">
-                <input
-                  type="text"
-                  value={sugArtist}
-                  onChange={(e) => setSugArtist(e.target.value)}
-                  placeholder="Cantor / Banda (opcional)"
-                  className="w-full bg-zinc-950 border border-zinc-800 rounded-2xl px-4 py-3 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:border-amber-500"
-                />
-              </div>
-
-              <div className="sm:col-span-3">
-                <button
-                  type="submit"
-                  className="w-full h-full flex items-center justify-center gap-2 py-3 px-4 rounded-2xl bg-amber-500 hover:bg-amber-400 active:scale-95 text-zinc-950 font-extrabold text-sm shadow-lg shadow-amber-500/20 transition cursor-pointer"
-                >
-                  <Send className="w-4 h-4" />
-                  <span>Enviar Sugestão</span>
-                </button>
-              </div>
-            </form>
-
-            {sugSent && (
-              <div className="mt-3 px-4 py-2.5 rounded-xl bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 text-xs sm:text-sm font-bold">
-                ✅ Sugestão enviada para o Mestre da Roda!
-              </div>
-            )}
-
-            {suggestions.length > 0 && (
-              <div className="mt-4 pt-4 border-t border-zinc-800/80">
-                <span className="block text-xs font-bold uppercase tracking-wider text-zinc-400 mb-2">
-                  Últimas sugestões enviadas pela galera ({suggestions.length}):
-                </span>
-                <div className="flex flex-wrap gap-2">
-                  {suggestions.slice(0, 8).map((s) => (
-                    <span
-                      key={s.suggestionId}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-zinc-300"
-                    >
-                      <strong className="text-amber-400">{s.title}</strong>
-                      {s.artist && <span>— {s.artist}</span>}
-                      <span className="text-zinc-500">({s.suggestedBy})</span>
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
+          {/* CAIXINHA DE SUGESTÕES PARA O MESTRE (quando há sala ativa, fica abaixo da lista) */}
+          {hasActiveRoom && renderSuggestionBox()}
         </div>
       )}
 

@@ -31,7 +31,24 @@ const KEYS = [
   'Cm', 'C#m', 'Dm', 'D#m', 'Em', 'Fm', 'F#m', 'Gm', 'G#m', 'Am', 'Bbm', 'Bm',
 ];
 
-export default function SongFormModal({ isOpen, onClose, onSave, initialData }) {
+function normalizeForMatch(str = '') {
+  return str
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+export default function SongFormModal({
+  isOpen,
+  onClose,
+  onSave,
+  initialData,
+  existingSongs = [],
+  onSwitchToEditSong,
+}) {
   const [title, setTitle] = useState('');
   const [artist, setArtist] = useState('');
   const [originalKey, setOriginalKey] = useState('G');
@@ -76,6 +93,45 @@ export default function SongFormModal({ isOpen, onClose, onSave, initialData }) 
   const previewLines = useMemo(() => {
     return parseChordProSong(content, 0);
   }, [content]);
+
+  // Verificação 100% local (sem requisições ao Firebase) se a música já está cadastrada
+  const isEditingExisting = Boolean(initialData?.id);
+
+  const duplicateMatches = useMemo(() => {
+    if (isEditingExisting) return [];
+    const candidateQuery = (title.trim() || onlineQuery.trim());
+    if (
+      !candidateQuery ||
+      candidateQuery.includes('cifraclub.com.br') ||
+      candidateQuery.length < 3
+    ) {
+      return [];
+    }
+
+    const normQuery = normalizeForMatch(candidateQuery);
+    if (normQuery.length < 3) return [];
+
+    return existingSongs.filter((song) => {
+      const normSongTitle = normalizeForMatch(song.title);
+      const normSongFull = normalizeForMatch(`${song.title} ${song.artist}`);
+      return (
+        normSongTitle === normQuery ||
+        normSongTitle.includes(normQuery) ||
+        normQuery.includes(normSongTitle) ||
+        normSongFull.includes(normQuery)
+      );
+    });
+  }, [title, onlineQuery, existingSongs, isEditingExisting]);
+
+  const findExistingByTitle = (targetTitle) => {
+    const normTarget = normalizeForMatch(targetTitle);
+    if (!normTarget) return null;
+    return (
+      existingSongs.find(
+        (s) => normalizeForMatch(s.title) === normTarget
+      ) || null
+    );
+  };
 
   if (!isOpen) return null;
 
@@ -279,30 +335,40 @@ export default function SongFormModal({ isOpen, onClose, onSave, initialData }) 
                   <span className="text-[11px] font-bold text-zinc-400 px-1 block">
                     Clique na música abaixo para importar a cifra completa:
                   </span>
-                  {searchResults.map((item, idx) => (
-                    <div
-                      key={`${item.artist}-${item.title}-${idx}`}
-                      className="flex items-center justify-between gap-2 p-2 rounded-lg bg-zinc-900/90 hover:bg-zinc-800 border border-zinc-800/80 transition"
-                    >
-                      <div className="min-w-0">
-                        <p className="text-xs sm:text-sm font-bold text-white truncate">
-                          {item.title}
-                        </p>
-                        <p className="text-[11px] text-zinc-400 truncate">
-                          {item.artist} {item.rhythm ? `• ${item.rhythm}` : ''}
-                        </p>
-                      </div>
-                      <button
-                        type="button"
-                        disabled={isImporting}
-                        onClick={() => handleImportFromCifraClub(item)}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-zinc-950 font-extrabold text-xs cursor-pointer shrink-0 disabled:opacity-50"
+                  {searchResults.map((item, idx) => {
+                    const alreadySaved = findExistingByTitle(item.title);
+                    return (
+                      <div
+                        key={`${item.artist}-${item.title}-${idx}`}
+                        className="flex items-center justify-between gap-2 p-2 rounded-lg bg-zinc-900/90 hover:bg-zinc-800 border border-zinc-800/80 transition"
                       >
-                        <Download className="w-3.5 h-3.5" />
-                        <span>Importar</span>
-                      </button>
-                    </div>
-                  ))}
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <p className="text-xs sm:text-sm font-bold text-white truncate">
+                              {item.title}
+                            </p>
+                            {alreadySaved && (
+                              <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-[10px] font-extrabold shrink-0">
+                                ✓ Já no Repertório
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-[11px] text-zinc-400 truncate">
+                            {item.artist} {item.rhythm ? `• ${item.rhythm}` : ''}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          disabled={isImporting}
+                          onClick={() => handleImportFromCifraClub(item)}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-zinc-950 font-extrabold text-xs cursor-pointer shrink-0 disabled:opacity-50"
+                        >
+                          <Download className="w-3.5 h-3.5" />
+                          <span>Importar</span>
+                        </button>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
 
@@ -312,17 +378,25 @@ export default function SongFormModal({ isOpen, onClose, onSave, initialData }) 
                   <Sparkles className="w-3 h-3 text-amber-400" /> Clássicos prontos para importar em 1 clique:
                 </span>
                 <div className="flex flex-wrap gap-1.5 max-h-20 overflow-y-auto">
-                  {RODA_POPULAR_SUGGESTIONS.slice(0, 12).map((sug) => (
-                    <button
-                      key={`${sug.artist}-${sug.title}`}
-                      type="button"
-                      disabled={isImporting}
-                      onClick={() => handleImportFromCifraClub(sug)}
-                      className="px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-amber-500/20 border border-zinc-800 hover:border-amber-500/50 text-zinc-300 hover:text-amber-300 text-[11px] font-medium transition cursor-pointer disabled:opacity-50"
-                    >
-                      + {sug.title} ({sug.artist})
-                    </button>
-                  ))}
+                  {RODA_POPULAR_SUGGESTIONS.slice(0, 12).map((sug) => {
+                    const alreadySaved = findExistingByTitle(sug.title);
+                    return (
+                      <button
+                        key={`${sug.artist}-${sug.title}`}
+                        type="button"
+                        disabled={isImporting}
+                        onClick={() => handleImportFromCifraClub(sug)}
+                        className={`px-2.5 py-1 rounded-lg border text-[11px] font-medium transition cursor-pointer disabled:opacity-50 ${
+                          alreadySaved
+                            ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/20'
+                            : 'bg-zinc-900 hover:bg-amber-500/20 border-zinc-800 hover:border-amber-500/50 text-zinc-300 hover:text-amber-300'
+                        }`}
+                      >
+                        {alreadySaved ? '✓ ' : '+ '}
+                        {sug.title} ({sug.artist})
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
@@ -332,6 +406,45 @@ export default function SongFormModal({ isOpen, onClose, onSave, initialData }) 
                   <span>{importError}</span>
                 </div>
               )}
+            </div>
+          )}
+
+          {/* AVISO AUTOMÁTICO DE MÚSICA JÁ CADASTRADA (100% Local / Zero Requisições) */}
+          {duplicateMatches.length > 0 && (
+            <div className="bg-amber-500/15 border border-amber-500/50 rounded-2xl p-3.5 space-y-2">
+              <div className="flex items-center gap-2 text-amber-300 text-xs sm:text-sm font-extrabold">
+                <AlertCircle className="w-4 h-4 shrink-0 text-amber-400" />
+                <span>
+                  Atenção: Encontramos {duplicateMatches.length === 1 ? 'esta música' : 'músicas parecidas'} já cadastrada(s) no seu repertório!
+                </span>
+              </div>
+              <div className="space-y-1.5">
+                {duplicateMatches.slice(0, 3).map((match) => (
+                  <div
+                    key={match.id}
+                    className="flex flex-wrap items-center justify-between gap-2 bg-zinc-950/80 border border-amber-500/30 rounded-xl px-3 py-2"
+                  >
+                    <div className="min-w-0">
+                      <span className="text-xs sm:text-sm font-bold text-white">
+                        {match.title}
+                      </span>
+                      <span className="text-xs text-zinc-400">
+                        {' '}
+                        — {match.artist} (Tom: {match.originalKey})
+                      </span>
+                    </div>
+                    {onSwitchToEditSong && (
+                      <button
+                        type="button"
+                        onClick={() => onSwitchToEditSong(match)}
+                        className="px-3 py-1 rounded-lg bg-amber-500 hover:bg-amber-400 text-zinc-950 text-xs font-extrabold transition cursor-pointer shrink-0"
+                      >
+                        Abrir Cifra Existente
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 
