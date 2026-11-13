@@ -159,6 +159,38 @@ export default function App() {
     return songs.find((s) => s.id === nextQueueItem.songId) || null;
   }, [songs, nextQueueItem]);
 
+  // Fila Contínua Inteligente (Tier 2 - 0 votos):
+  // Sugere músicas do repertório quando não há votos, priorizando as que ainda não tocaram na sessão
+  const autoSuggestedSongs = useMemo(() => {
+    const queuedIds = new Set((session?.queue || []).map((q) => q.songId));
+    const historyOrder = new Map();
+    (session?.history || []).forEach((h, idx) => {
+      if (h?.songId && !historyOrder.has(h.songId)) {
+        historyOrder.set(h.songId, idx);
+      }
+    });
+
+    const candidates = songs.filter(
+      (s) => s.id !== currentSong?.id && !queuedIds.has(s.id)
+    );
+
+    return candidates.sort((a, b) => {
+      const aPlayedIdx = historyOrder.has(a.id) ? historyOrder.get(a.id) : null;
+      const bPlayedIdx = historyOrder.has(b.id) ? historyOrder.get(b.id) : null;
+
+      if (aPlayedIdx === null && bPlayedIdx !== null) return -1;
+      if (aPlayedIdx !== null && bPlayedIdx === null) return 1;
+      if (aPlayedIdx !== null && bPlayedIdx !== null) {
+        return bPlayedIdx - aPlayedIdx;
+      }
+      return 0;
+    });
+  }, [songs, currentSong?.id, session?.queue, session?.history]);
+
+  const nextAutoSong = autoSuggestedSongs[0] || null;
+  const effectiveNextSong = nextSongObj || nextAutoSong;
+  const isNextSongVoted = Boolean(nextSongObj);
+
   // Sugestões unificadas (funciona antes mesmo de criar sala + durante a sala)
   const combinedSuggestions = useMemo(() => {
     const map = new Map();
@@ -351,10 +383,42 @@ export default function App() {
     setActiveTab('viewer');
   };
 
-  // Pular para a próxima música mais votada da fila
+  // Tocar música sugerida automaticamente (0 votos) quando a fila votada estiver vazia
+  const handlePlayAutoSuggested = async (songObj) => {
+    if (!songObj) return;
+    if (currentSong) {
+      await registerSongPlayed(
+        currentSong.id,
+        songObj.id,
+        0,
+        session,
+        currentRoomId
+      );
+    }
+    if (syncRoom && currentRoomId) {
+      await updateLiveSession(
+        {
+          currentSongId: songObj.id,
+          transpose: 0,
+        },
+        currentRoomId
+      );
+    } else {
+      setLocalSongId(songObj.id);
+      setLocalTranspose(0);
+    }
+    setActiveTab('viewer');
+  };
+
+  // Pular para a próxima música mais votada da fila (ou para a próxima sugerida automaticamente se não houver votos)
   const handleNextInQueue = async () => {
-    if (!nextQueueItem) return;
-    await handlePlayFromQueue(nextQueueItem);
+    if (nextQueueItem) {
+      await handlePlayFromQueue(nextQueueItem);
+      return;
+    }
+    if (nextAutoSong) {
+      await handlePlayAutoSuggested(nextAutoSong);
+    }
   };
 
   // Marcar música atual como tocada
@@ -627,6 +691,7 @@ export default function App() {
             currentSong={currentSong}
             transpose={effectiveTranspose}
             queue={session?.queue || []}
+            autoSuggestedSongs={autoSuggestedSongs}
             suggestions={combinedSuggestions}
             onVoteSong={handleVoteOrAddSong}
             onSuggestSong={handleSuggestSong}
@@ -647,7 +712,8 @@ export default function App() {
                   setIsModalOpen(true);
                 }}
                 queueCount={session?.queue?.length || 0}
-                nextSongTitle={nextSongObj?.title}
+                nextSongTitle={effectiveNextSong?.title}
+                isNextSongVoted={isNextSongVoted}
                 syncRoom={syncRoom}
                 onToggleSyncRoom={() => {
                   setSyncRoom((prev) => !prev);
@@ -681,9 +747,11 @@ export default function App() {
                 roomName={session?.roomName || 'Nenhuma Sala Ativa'}
                 songs={songs}
                 queue={session?.queue || []}
+                autoSuggestedSongs={autoSuggestedSongs}
                 suggestions={combinedSuggestions}
                 currentSong={currentSong}
                 onPlayFromQueue={handlePlayFromQueue}
+                onPlayAutoSong={handlePlayAutoSuggested}
                 onRemoveFromQueue={handleRemoveFromQueue}
                 onAddToQueue={handleVoteOrAddSong}
                 onRemoveSuggestion={handleRemoveSuggestion}

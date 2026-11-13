@@ -21,9 +21,11 @@ export default function JukeboxView({
   roomName = 'Resenha Musical',
   songs,
   queue = [],
+  autoSuggestedSongs = [],
   suggestions = [],
   currentSong,
   onPlayFromQueue,
+  onPlayAutoSong,
   onRemoveFromQueue,
   onAddToQueue,
   onRemoveSuggestion,
@@ -222,6 +224,60 @@ export default function JukeboxView({
                   </div>
                 );
               })}
+            </div>
+          )}
+
+          {/* Sequência Automática (0 votos) caso não haja mais votos na fila */}
+          {autoSuggestedSongs.length > 0 && (
+            <div className="mt-5 pt-4 border-t border-zinc-800/80 space-y-2.5">
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <h4 className="text-xs font-extrabold uppercase tracking-wider text-zinc-400">
+                    Sequência Automática (Sem votos ainda)
+                  </h4>
+                  <p className="text-[11px] text-zinc-500">
+                    Se ninguém votar, a roda continua nesta ordem para a música não parar:
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                {autoSuggestedSongs.slice(0, 5).map((song, idx) => (
+                  <div
+                    key={song.id}
+                    className="flex items-center justify-between gap-3 bg-zinc-950/50 border border-zinc-800/70 rounded-xl px-3.5 py-2.5"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <span className="w-7 h-7 rounded-lg bg-zinc-800/80 text-zinc-400 font-mono text-[11px] font-bold flex items-center justify-center shrink-0">
+                        {queue.length + idx + 1}º
+                      </span>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <h5 className="font-semibold text-zinc-200 text-sm truncate">
+                            {song.title}
+                          </h5>
+                          <span className="px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-400 text-[10px] font-semibold shrink-0">
+                            0 votos
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-zinc-500 truncate">
+                          {song.artist} • Tom: {song.originalKey}
+                        </p>
+                      </div>
+                    </div>
+
+                    {onPlayAutoSong && (
+                      <button
+                        type="button"
+                        onClick={() => onPlayAutoSong(song)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-amber-500 text-zinc-200 hover:text-zinc-950 font-bold text-xs transition cursor-pointer shrink-0"
+                      >
+                        <Play className="w-3 h-3 fill-current" /> Tocar
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
           )}
         </div>

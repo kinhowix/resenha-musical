@@ -35,6 +35,7 @@ export default function ChordViewer({
   onEditSong,
   queueCount = 0,
   nextSongTitle = null,
+  isNextSongVoted = false,
   syncRoom,
   onToggleSyncRoom,
 }) {
@@ -454,13 +455,24 @@ export default function ChordViewer({
               <CheckCircle2 className="w-4 h-4" /> Marcar como Tocada
             </button>
 
-            {queueCount > 0 && (
+            {(queueCount > 0 || nextSongTitle) && (
               <button
                 onClick={onNextInQueue}
-                className="flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 text-xs sm:text-sm font-bold shadow-lg shadow-amber-500/20 transition cursor-pointer"
+                className={`flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition cursor-pointer ${
+                  isNextSongVoted || queueCount > 0
+                    ? 'bg-amber-500 hover:bg-amber-400 text-zinc-950 shadow-lg shadow-amber-500/20'
+                    : 'bg-zinc-800 hover:bg-amber-500 text-amber-300 hover:text-zinc-950 border border-amber-500/40'
+                }`}
+                title={
+                  isNextSongVoted || queueCount > 0
+                    ? 'Tocar a próxima música mais votada da fila'
+                    : 'Ninguém votou ainda — toque para seguir para a próxima música sugerida do repertório'
+                }
               >
                 <SkipForward className="w-4 h-4 fill-current" />
-                Próxima da Fila {nextSongTitle ? `(${nextSongTitle})` : ''}
+                {isNextSongVoted || queueCount > 0
+                  ? `Próxima da Fila${nextSongTitle ? ` (${nextSongTitle})` : ''}`
+                  : `Próxima Sugerida (${nextSongTitle})`}
               </button>
             )}
           </div>
