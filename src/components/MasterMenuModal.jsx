@@ -17,6 +17,8 @@ import {
   UserPlus,
   Pencil,
   User,
+  Timer,
+  Flame,
 } from 'lucide-react';
 import { subscribeToRooms } from '../services/hybridStore';
 
@@ -34,6 +36,8 @@ export default function MasterMenuModal({
   onDeleteMasterUser,
   currentRoomId,
   currentRoomName,
+  countdownTargetAt,
+  onSetCountdown,
   onCreateOrSwitchRoom,
   onDeleteRoom,
   onDeleteOldRooms,
@@ -45,6 +49,7 @@ export default function MasterMenuModal({
   const [loginError, setLoginError] = useState('');
   const [roomsList, setRoomsList] = useState([]);
   const [isCleaning, setIsCleaning] = useState(false);
+  const [customMinutes, setCustomMinutes] = useState('15');
 
   // Campos para criar/renomear sala
   const [newRoomName, setNewRoomName] = useState(currentRoomName || '');
@@ -502,6 +507,67 @@ export default function MasterMenuModal({
                   >
                     <Share2 className="w-4 h-4" /> Enviar no WhatsApp
                   </button>
+                </div>
+
+                {/* Cronômetro Regressivo "Aquecendo o Gogó" (1 gravação apenas, 0 requisições por segundo) */}
+                <div className="w-full pt-3 mt-2 border-t border-zinc-800/80 text-left space-y-2.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-extrabold uppercase tracking-wider text-amber-400 flex items-center gap-1.5">
+                      <Timer className="w-4 h-4" /> Contador &ldquo;Aquecendo o Gogó&rdquo;
+                    </span>
+                    {countdownTargetAt && (
+                      <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 text-[10px] font-bold">
+                        Contagem Ativa
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-zinc-400">
+                    Coloque uma contagem regressiva na tela dos celulares enquanto a galera vai entrando e votando nas primeiras músicas:
+                  </p>
+
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {[5, 10, 15, 30].map((mins) => (
+                      <button
+                        key={mins}
+                        type="button"
+                        onClick={() => onSetCountdown?.(mins)}
+                        className="px-3 py-1.5 rounded-xl bg-zinc-900 hover:bg-amber-500 border border-zinc-700 hover:border-amber-400 text-zinc-200 hover:text-zinc-950 text-xs font-extrabold transition cursor-pointer"
+                      >
+                        +{mins} min
+                      </button>
+                    ))}
+
+                    <div className="flex items-center gap-1 ml-auto">
+                      <input
+                        type="number"
+                        min="1"
+                        max="180"
+                        value={customMinutes}
+                        onChange={(e) => setCustomMinutes(e.target.value)}
+                        className="w-14 bg-zinc-900 border border-zinc-700 rounded-xl px-2 py-1.5 text-xs text-center text-white focus:outline-none focus:border-amber-500"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const val = parseInt(customMinutes, 10);
+                          if (val > 0) onSetCountdown?.(val);
+                        }}
+                        className="px-2.5 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 text-xs font-extrabold cursor-pointer"
+                      >
+                        Iniciar
+                      </button>
+                    </div>
+                  </div>
+
+                  {countdownTargetAt && (
+                    <button
+                      type="button"
+                      onClick={() => onSetCountdown?.(null)}
+                      className="w-full flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/40 text-emerald-300 text-xs font-extrabold transition cursor-pointer"
+                    >
+                      <Flame className="w-3.5 h-3.5" /> Encerrar Contagem (Começar a Tocar Agora!)
+                    </button>
+                  )}
                 </div>
               </div>
             )}

@@ -35,6 +35,8 @@ import {
   resetAllSongsPlayCount,
   resetSongPlayCount,
   clearRoomHistory,
+  slugifyRoomId,
+  setRoomCountdown,
 } from './services/hybridStore';
 import ChordViewer from './components/ChordViewer';
 import SongListView from './components/SongListView';
@@ -56,13 +58,11 @@ export default function App() {
     masterUsers: [],
   });
 
-  // Identifica a sala pelo link (?sala=nome-da-sala) ou usa a sala ativa do Mestre
+  // Identifica a sala pelo link (?sala=nome-da-sala)
   const [urlRoomId, setUrlRoomId] = useState(() => {
     const params = new URLSearchParams(window.location.search);
     return params.get('sala') || null;
   });
-
-  const currentRoomId = urlRoomId || appSettings.activeRoomId || null;
 
   const [session, setSession] = useState(null);
 
@@ -70,6 +70,11 @@ export default function App() {
   const [isMaster, setIsMaster] = useState(() => {
     return localStorage.getItem(MASTER_AUTH_STORAGE_KEY) === 'true';
   });
+
+  // Sala exclusiva para quem recebeu o convite (?sala=...) ou para o Mestre logado
+  const currentRoomId = isMaster
+    ? urlRoomId || appSettings.activeRoomId || null
+    : urlRoomId || null;
   const [currentMasterUser, setCurrentMasterUser] = useState(() => {
     try {
       const raw = localStorage.getItem(MASTER_USER_STORAGE_KEY);
@@ -129,6 +134,7 @@ export default function App() {
       if (!sess && urlRoomId) {
         setUrlRoomId(null);
         window.history.replaceState({}, '', window.location.pathname);
+        showToast('Sala não encontrada ou já encerrada pelo anfitrião.');
       }
     }, currentRoomId);
 
@@ -286,6 +292,38 @@ export default function App() {
     if (!currentRoomId) return;
     await clearRoomQueueAndHistory(currentRoomId);
     showToast(`Fila e histórico da sala "${session?.roomName || currentRoomId}" zerados!`);
+  };
+
+  // Definir ou parar o Cronômetro Regressivo "Aquecendo o Gogó" (Mestre) - 1 única gravação
+  const handleSetCountdown = async (minutes) => {
+    if (!currentRoomId) return;
+    await setRoomCountdown(minutes, currentRoomId);
+    if (minutes && Number(minutes) > 0) {
+      showToast(`Cronômetro de ${minutes} min iniciado na sala!`);
+    } else {
+      showToast('Cronômetro encerrado! A roda começou!');
+    }
+  };
+
+  // Convidado entra manualmente digitando o nome/código da sala (caso não tenha vindo pelo link)
+  const handleJoinRoomByCode = (roomInput) => {
+    const clean = (roomInput || '').trim();
+    if (!clean) return;
+    // Aceita tanto o link completo quanto apenas o nome/código da sala
+    let extracted = clean;
+    if (clean.includes('sala=')) {
+      try {
+        const u = new URL(clean);
+        extracted = u.searchParams.get('sala') || clean;
+      } catch {
+        const match = clean.match(/sala=([^&]+)/);
+        if (match) extracted = decodeURIComponent(match[1]);
+      }
+    }
+    const slug = slugifyRoomId(extracted);
+    setUrlRoomId(slug);
+    const newUrl = `${window.location.pathname}?sala=${encodeURIComponent(slug)}`;
+    window.history.replaceState({}, '', newUrl);
   };
 
   // Selecionar música (Mestre)
@@ -687,6 +725,7 @@ export default function App() {
           <GuestRoomView
             hasActiveRoom={hasActiveRoom}
             roomName={session?.roomName}
+            countdownTargetAt={session?.countdownTargetAt || null}
             songs={songs}
             currentSong={currentSong}
             transpose={effectiveTranspose}
@@ -695,6 +734,7 @@ export default function App() {
             suggestions={combinedSuggestions}
             onVoteSong={handleVoteOrAddSong}
             onSuggestSong={handleSuggestSong}
+            onJoinRoom={handleJoinRoomByCode}
             onOpenMasterLogin={() => setIsMasterModalOpen(true)}
           />
         ) : (
@@ -801,6 +841,8 @@ export default function App() {
         onDeleteMasterUser={handleDeleteMasterUser}
         currentRoomId={hasActiveRoom ? currentRoomId : null}
         currentRoomName={hasActiveRoom ? session?.roomName : ''}
+        countdownTargetAt={session?.countdownTargetAt || null}
+        onSetCountdown={handleSetCountdown}
         onCreateOrSwitchRoom={handleCreateOrSwitchRoom}
         onDeleteRoom={handleDeleteRoom}
         onDeleteOldRooms={handleDeleteOldRooms}

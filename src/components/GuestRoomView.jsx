@@ -13,6 +13,9 @@ import {
   MessageSquarePlus,
   Send,
   X,
+  Timer,
+  Flame,
+  LogIn,
 } from 'lucide-react';
 import {
   parseChordProSong,
@@ -39,6 +42,7 @@ function normalizeGuestText(str = '') {
 export default function GuestRoomView({
   hasActiveRoom = true,
   roomName,
+  countdownTargetAt = null,
   songs = [],
   currentSong,
   transpose = 0,
@@ -47,12 +51,15 @@ export default function GuestRoomView({
   suggestions = [],
   onVoteSong,
   onSuggestSong,
+  onJoinRoom,
   onOpenMasterLogin,
 }) {
   // Aba super simples: 'choose' (Escolher Música & Ranking) ou 'lyrics' (Ver Música Tocando Agora / Consultada)
   const [guestSection, setGuestSection] = useState('choose');
   const [previewSongId, setPreviewSongId] = useState(null);
   const [search, setSearch] = useState('');
+  const [roomCodeInput, setRoomCodeInput] = useState('');
+  const [remainingSeconds, setRemainingSeconds] = useState(null);
   const [guestName, setGuestName] = useState(
     () => localStorage.getItem(VOTER_NAME_KEY) || ''
   );
@@ -77,6 +84,41 @@ export default function GuestRoomView({
   const [sugTitle, setSugTitle] = useState('');
   const [sugArtist, setSugArtist] = useState('');
   const [sugSent, setSugSent] = useState(false);
+
+  // Calcula localmente a contagem regressiva a partir de countdownTargetAt (0 requisições extras!)
+  useEffect(() => {
+    if (!countdownTargetAt) {
+      setRemainingSeconds(null);
+      return;
+    }
+
+    const updateTimer = () => {
+      const targetMs = new Date(countdownTargetAt).getTime();
+      if (Number.isNaN(targetMs)) {
+        setRemainingSeconds(null);
+        return;
+      }
+      const diffSec = Math.max(0, Math.ceil((targetMs - Date.now()) / 1000));
+      setRemainingSeconds(diffSec);
+    };
+
+    updateTimer();
+    const interval = setInterval(updateTimer, 1000);
+    return () => clearInterval(interval);
+  }, [countdownTargetAt]);
+
+  const formatCountdown = (totalSec) => {
+    if (totalSec === null || totalSec === undefined) return '';
+    const mins = Math.floor(totalSec / 60);
+    const secs = totalSec % 60;
+    return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+  };
+
+  const handleJoinRoomSubmit = (e) => {
+    e.preventDefault();
+    if (!roomCodeInput.trim()) return;
+    onJoinRoom?.(roomCodeInput.trim());
+  };
 
   const handleSendSuggestion = (e) => {
     e.preventDefault();
@@ -288,48 +330,77 @@ export default function GuestRoomView({
 
   return (
     <div className="space-y-6 pb-32">
-      {/* Banner Superior: Sala Ao Vivo OU Aguardando Início */}
+      {/* Banner Superior: Sala Ao Vivo OU Recepção Exclusiva (Fora da Sala) */}
       {!hasActiveRoom ? (
-        <div className="bg-gradient-to-br from-amber-500/15 via-zinc-900 to-zinc-900 border border-amber-500/30 rounded-3xl p-5 sm:p-7 shadow-2xl space-y-5">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="bg-gradient-to-br from-amber-500/20 via-zinc-900 to-zinc-900 border border-amber-500/40 rounded-3xl p-5 sm:p-8 shadow-2xl space-y-6">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
             <div className="flex items-start gap-4">
-              <div className="w-14 h-14 rounded-2xl bg-amber-500 text-zinc-950 flex items-center justify-center shadow-lg shadow-amber-500/20 shrink-0">
-                <Guitar className="w-8 h-8 stroke-[2.2]" />
+              <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-amber-500 text-zinc-950 flex items-center justify-center shadow-lg shadow-amber-500/25 shrink-0">
+                <Guitar className="w-8 h-8 sm:w-9 sm:h-9 stroke-[2.2]" />
               </div>
-              <div className="space-y-1">
+              <div className="space-y-2">
                 <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/20 text-amber-300 text-xs font-extrabold uppercase tracking-wider">
-                  Aguardando Início da Sala
+                  <Sparkles className="w-3.5 h-3.5" /> Bem-vindo ao Resenha Musical
                 </span>
-                <h1 className="text-xl sm:text-3xl font-extrabold text-white">
-                  A Resenha ainda não começou!
+                <h1 className="text-2xl sm:text-3xl font-extrabold text-white leading-tight">
+                  Cante junto com a roda direto pelo seu celular! 🎶
                 </h1>
+                <p className="text-sm sm:text-base text-zinc-200 leading-relaxed max-w-2xl">
+                  Aqui na nossa roda, <strong className="text-amber-400">as músicas, letras e cifras aparecem ao vivo na tela do celular de todo mundo</strong> para cantarmos juntos! Você também vota nas suas músicas preferidas para subirem no ranking da fila.
+                </p>
                 <p className="text-xs sm:text-sm text-zinc-300 leading-relaxed max-w-2xl">
-                  A sala de votação ao vivo ainda não foi aberta pelo anfitrião, mas você já pode{' '}
-                  <strong className="text-amber-400">consultar as músicas do repertório</strong> abaixo e{' '}
-                  <strong className="text-amber-400">enviar sugestões</strong> de músicas novas para o Mestre!
+                  🔒 <strong className="text-white">As salas são exclusivas para convidados:</strong> para entrar na votação ao vivo, basta tocar no <strong className="text-emerald-400">link de convite enviado no seu WhatsApp</strong> (ou ler o QR Code da roda). Enquanto isso, você já pode explorar o repertório e enviar sugestões abaixo!
                 </p>
               </div>
             </div>
 
-            {/* Campo simples para o convidado colocar o nome se quiser */}
-            <div className="bg-zinc-950/80 border border-zinc-800 rounded-2xl p-3 sm:w-64 shrink-0">
-              <label className="block text-[11px] font-bold uppercase tracking-wider text-amber-400 mb-1">
-                Seu Nome (Opcional):
-              </label>
-              <input
-                type="text"
-                value={guestName}
-                onChange={(e) => handleNameChange(e.target.value)}
-                placeholder="Ex: Tio João, Ana..."
-                className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-3 py-2 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:border-amber-500"
-              />
+            {/* Caixa lateral: Seu Nome + Entrar pelo nome/código da sala */}
+            <div className="bg-zinc-950/85 border border-zinc-800 rounded-2xl p-4 lg:w-80 shrink-0 space-y-3">
+              <div>
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-amber-400 mb-1">
+                  Seu Nome na Roda (Opcional):
+                </label>
+                <input
+                  type="text"
+                  value={guestName}
+                  onChange={(e) => handleNameChange(e.target.value)}
+                  placeholder="Ex: Tio João, Ana..."
+                  className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-3 py-2 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:border-amber-500"
+                />
+              </div>
+
+              {onJoinRoom && (
+                <form
+                  onSubmit={handleJoinRoomSubmit}
+                  className="pt-2 border-t border-zinc-800/80 space-y-1.5"
+                >
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-300">
+                    Tem o nome ou código da sala?
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={roomCodeInput}
+                      onChange={(e) => setRoomCodeInput(e.target.value)}
+                      placeholder="Ex: Churrasco do Alex"
+                      className="flex-1 min-w-0 bg-zinc-900 border border-zinc-700 rounded-xl px-3 py-2 text-xs sm:text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:border-amber-500"
+                    />
+                    <button
+                      type="submit"
+                      className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 font-extrabold text-xs sm:text-sm transition cursor-pointer shrink-0"
+                    >
+                      <LogIn className="w-4 h-4" /> Entrar
+                    </button>
+                  </div>
+                </form>
+              )}
             </div>
           </div>
 
           {onOpenMasterLogin && (
             <div className="pt-3 border-t border-zinc-800/80 flex flex-wrap items-center justify-between gap-2">
-              <span className="text-xs text-zinc-400">
-                Assim que o anfitrião criar a sala, a votação ao vivo aparecerá automaticamente aqui.
+              <span className="text-xs sm:text-sm text-zinc-400">
+                Recebeu o convite pelo WhatsApp? Abra pelo link do convite para cair direto na sala da resenha!
               </span>
               <button
                 type="button"
@@ -342,17 +413,17 @@ export default function GuestRoomView({
           )}
         </div>
       ) : (
-        <div className="bg-gradient-to-br from-amber-500/20 via-zinc-900 to-zinc-900 border border-amber-500/40 rounded-3xl p-5 sm:p-6 shadow-xl">
+        <div className="bg-gradient-to-br from-amber-500/20 via-zinc-900 to-zinc-900 border border-amber-500/40 rounded-3xl p-5 sm:p-6 shadow-xl space-y-5">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div>
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500 text-zinc-950 text-xs font-extrabold uppercase tracking-wider mb-2">
-                <Sparkles className="w-3.5 h-3.5" /> Sala Ao Vivo
+            <div className="space-y-1.5">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500 text-zinc-950 text-xs font-extrabold uppercase tracking-wider">
+                <Sparkles className="w-3.5 h-3.5" /> Sala Exclusiva Ao Vivo
               </span>
               <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
                 {roomName || 'Resenha Musical'}
               </h1>
-              <p className="text-sm text-zinc-300 mt-1">
-                Escolha as próximas músicas para subir no ranking ou acompanhe a letra do que está tocando!
+              <p className="text-sm sm:text-base text-zinc-200 leading-relaxed max-w-2xl">
+                🎶 <strong className="text-amber-400">As letras e cifras aparecem ao vivo aqui na tela do seu celular</strong> para todo mundo cantar junto! Vote nas músicas abaixo para preparar a fila da nossa roda!
               </p>
             </div>
 
@@ -371,9 +442,68 @@ export default function GuestRoomView({
             </div>
           </div>
 
+          {/* Contador Regressivo "Aquecendo o Gogó" */}
+          {remainingSeconds !== null && (
+            <div
+              className={`rounded-2xl p-4 sm:p-5 border flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition ${
+                remainingSeconds > 0
+                  ? 'bg-gradient-to-r from-amber-500/20 via-zinc-950 to-zinc-950 border-amber-500/60 shadow-lg shadow-amber-500/10'
+                  : 'bg-gradient-to-r from-emerald-500/20 via-zinc-950 to-zinc-950 border-emerald-500/50'
+              }`}
+            >
+              <div className="flex items-center gap-3.5">
+                <div
+                  className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 shadow-lg ${
+                    remainingSeconds > 0
+                      ? 'bg-amber-500 text-zinc-950'
+                      : 'bg-emerald-500 text-zinc-950'
+                  }`}
+                >
+                  {remainingSeconds > 0 ? (
+                    <Timer className="w-7 h-7 animate-pulse" />
+                  ) : (
+                    <Flame className="w-7 h-7" />
+                  )}
+                </div>
+                <div>
+                  <span
+                    className={`text-xs font-extrabold uppercase tracking-wider ${
+                      remainingSeconds > 0 ? 'text-amber-400' : 'text-emerald-400'
+                    }`}
+                  >
+                    {remainingSeconds > 0
+                      ? '🎤 Vão aquecendo o gogó!'
+                      : '🔥 O aquecimento terminou!'}
+                  </span>
+                  <h3 className="text-base sm:text-lg font-extrabold text-white">
+                    {remainingSeconds > 0
+                      ? 'A nossa roda de violão começa em instantes!'
+                      : 'A Roda Começou! Solta a voz com a galera!'}
+                  </h3>
+                  <p className="text-xs sm:text-sm text-zinc-300 mt-0.5">
+                    {remainingSeconds > 0
+                      ? 'Aproveite enquanto o relógio roda para já ir votando nas músicas abaixo e montar a fila!'
+                      : 'Acompanhe a letra na tela e continue votando nas próximas músicas!'}
+                  </p>
+                </div>
+              </div>
+
+              {remainingSeconds > 0 && (
+                <div className="bg-zinc-950 border-2 border-amber-500/70 rounded-2xl px-5 py-2.5 text-center shrink-0 shadow-inner">
+                  <span className="block text-[10px] font-bold uppercase tracking-widest text-amber-400">
+                    Começa em
+                  </span>
+                  <span className="font-mono text-2xl sm:text-3xl font-extrabold text-white tracking-wider">
+                    {formatCountdown(remainingSeconds)}
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Cartão Destaque: TOCANDO AGORA */}
           {currentSong && (
-            <div className="mt-5 bg-zinc-950/90 border border-amber-500/50 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="bg-zinc-950/90 border border-amber-500/50 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div className="flex items-center gap-3.5">
                 <div className="w-12 h-12 rounded-2xl bg-amber-500 text-zinc-950 flex items-center justify-center shrink-0 shadow-lg shadow-amber-500/20">
                   <Disc3

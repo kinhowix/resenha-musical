@@ -452,6 +452,7 @@ function getDefaultSession(roomId = 'roda-principal', roomName) {
     roomName: resolvedName,
     currentSongId: INITIAL_SONGS[0].id,
     transpose: 0,
+    countdownTargetAt: null,
     queue: [],
     suggestions: [],
     history: [],
@@ -1224,4 +1225,21 @@ export async function clearRoomHistory(roomId) {
   if (!roomId) return;
   await updateLiveSession({ history: [] }, roomId);
 }
+
+/**
+ * Define ou cancela o Contador Regressivo ("Aquecendo o Gogó") da sala ativa.
+ * Grava apenas 1 vez o timestamp alvo (`countdownTargetAt`) no documento da sala,
+ * permitindo que os celulares contem localmente sem gastar nenhuma requisição extra por segundo!
+ */
+export async function setRoomCountdown(minutes, roomId) {
+  if (!roomId) return null;
+  const numMinutes = Number(minutes);
+  const countdownTargetAt =
+    numMinutes > 0
+      ? new Date(Date.now() + numMinutes * 60 * 1000).toISOString()
+      : null;
+
+  return await updateLiveSession({ countdownTargetAt }, roomId);
+}
+
 
