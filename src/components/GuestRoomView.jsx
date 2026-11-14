@@ -228,7 +228,7 @@ export default function GuestRoomView({
           </h2>
           <p className="text-xs sm:text-sm text-zinc-400">
             {hasActiveRoom
-              ? 'Peça qualquer música para o Mestre cadastrar na roda!'
+              ? 'Peça qualquer música para o Mestre cadastrar na resenha!'
               : 'Mesmo antes da sala abrir, você já pode deixar sugestões de músicas para o Mestre preparar!'}
           </p>
         </div>
@@ -244,7 +244,7 @@ export default function GuestRoomView({
             required
             value={sugTitle}
             onChange={(e) => setSugTitle(e.target.value)}
-            placeholder="Nome da música (ex: Boate Azul) *"
+            placeholder="Nome da música (ex: Pinhal) *"
             className="w-full bg-zinc-950 border border-zinc-800 rounded-2xl px-4 py-3 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:border-amber-500"
           />
         </div>
@@ -302,7 +302,7 @@ export default function GuestRoomView({
 
       {sugSent && (
         <div className="mt-3 px-4 py-2.5 rounded-xl bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 text-xs sm:text-sm font-bold">
-          ✅ Sugestão enviada para o Mestre da Roda!
+          ✅ Sugestão enviada para o Mestre da Resenha!
         </div>
       )}
 
@@ -446,15 +446,15 @@ export default function GuestRoomView({
           {remainingSeconds !== null && (
             <div
               className={`rounded-2xl p-4 sm:p-5 border flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition ${remainingSeconds > 0
-                  ? 'bg-gradient-to-r from-amber-500/20 via-zinc-950 to-zinc-950 border-amber-500/60 shadow-lg shadow-amber-500/10'
-                  : 'bg-gradient-to-r from-emerald-500/20 via-zinc-950 to-zinc-950 border-emerald-500/50'
+                ? 'bg-gradient-to-r from-amber-500/20 via-zinc-950 to-zinc-950 border-amber-500/60 shadow-lg shadow-amber-500/10'
+                : 'bg-gradient-to-r from-emerald-500/20 via-zinc-950 to-zinc-950 border-emerald-500/50'
                 }`}
             >
               <div className="flex items-center gap-3.5">
                 <div
                   className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 shadow-lg ${remainingSeconds > 0
-                      ? 'bg-amber-500 text-zinc-950'
-                      : 'bg-emerald-500 text-zinc-950'
+                    ? 'bg-amber-500 text-zinc-950'
+                    : 'bg-emerald-500 text-zinc-950'
                     }`}
                 >
                   {remainingSeconds > 0 ? (
@@ -534,8 +534,8 @@ export default function GuestRoomView({
                   );
                 }}
                 className={`py-3 px-5 rounded-xl font-extrabold text-sm transition flex items-center justify-center gap-2 cursor-pointer shrink-0 ${guestSection === 'lyrics' && !previewSongId
-                    ? 'bg-zinc-800 text-white hover:bg-zinc-700'
-                    : 'bg-amber-500 hover:bg-amber-400 text-zinc-950 shadow-lg shadow-amber-500/25'
+                  ? 'bg-zinc-800 text-white hover:bg-zinc-700'
+                  : 'bg-amber-500 hover:bg-amber-400 text-zinc-950 shadow-lg shadow-amber-500/25'
                   }`}
               >
                 <Music className="w-4 h-4" />
@@ -553,8 +553,8 @@ export default function GuestRoomView({
         <button
           onClick={() => setGuestSection('choose')}
           className={`py-3.5 px-4 rounded-2xl font-extrabold text-sm sm:text-base flex items-center justify-center gap-2 border transition cursor-pointer ${guestSection === 'choose'
-              ? 'bg-amber-500 text-zinc-950 border-amber-400 shadow-lg shadow-amber-500/20'
-              : 'bg-zinc-900 text-zinc-300 border-zinc-800 hover:bg-zinc-800'
+            ? 'bg-amber-500 text-zinc-950 border-amber-400 shadow-lg shadow-amber-500/20'
+            : 'bg-zinc-900 text-zinc-300 border-zinc-800 hover:bg-zinc-800'
             }`}
         >
           <ThumbsUp className="w-5 h-5" />
@@ -571,8 +571,8 @@ export default function GuestRoomView({
             setGuestSection('lyrics');
           }}
           className={`py-3.5 px-4 rounded-2xl font-extrabold text-sm sm:text-base flex items-center justify-center gap-2 border transition cursor-pointer ${guestSection === 'lyrics'
-              ? 'bg-amber-500 text-zinc-950 border-amber-400 shadow-lg shadow-amber-500/20'
-              : 'bg-zinc-900 text-zinc-300 border-zinc-800 hover:bg-zinc-800'
+            ? 'bg-amber-500 text-zinc-950 border-amber-400 shadow-lg shadow-amber-500/20'
+            : 'bg-zinc-900 text-zinc-300 border-zinc-800 hover:bg-zinc-800'
             }`}
         >
           <Music className="w-5 h-5" />
@@ -635,8 +635,8 @@ export default function GuestRoomView({
                   type="button"
                   onClick={() => setLyricsOnly((prev) => !prev)}
                   className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-extrabold border transition cursor-pointer ${lyricsOnly
-                      ? 'bg-amber-500 text-zinc-950 border-amber-400 shadow-lg shadow-amber-500/20'
-                      : 'bg-zinc-950 border-zinc-800 text-zinc-200 hover:bg-zinc-800'
+                    ? 'bg-amber-500 text-zinc-950 border-amber-400 shadow-lg shadow-amber-500/20'
+                    : 'bg-zinc-950 border-zinc-800 text-zinc-200 hover:bg-zinc-800'
                     }`}
                 >
                   <Mic className="w-3.5 h-3.5" />
@@ -654,8 +654,8 @@ export default function GuestRoomView({
                       type="button"
                       onClick={() => setIsSimplified((prev) => !prev)}
                       className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-extrabold border transition cursor-pointer ${isSimplified
-                          ? 'bg-emerald-500 text-zinc-950 border-emerald-400 shadow-lg shadow-emerald-500/20'
-                          : 'bg-zinc-950 border-zinc-800 text-zinc-300 hover:bg-zinc-800'
+                        ? 'bg-emerald-500 text-zinc-950 border-emerald-400 shadow-lg shadow-emerald-500/20'
+                        : 'bg-zinc-950 border-zinc-800 text-zinc-300 hover:bg-zinc-800'
                         }`}
                     >
                       <Sparkles className="w-3.5 h-3.5" />
@@ -668,8 +668,8 @@ export default function GuestRoomView({
                       type="button"
                       onClick={() => setShowDiagrams((prev) => !prev)}
                       className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border transition cursor-pointer ${showDiagrams
-                          ? 'bg-amber-500/15 border-amber-500/40 text-amber-300'
-                          : 'bg-zinc-950 border-zinc-800 text-zinc-400'
+                        ? 'bg-amber-500/15 border-amber-500/40 text-amber-300'
+                        : 'bg-zinc-950 border-zinc-800 text-zinc-400'
                         }`}
                     >
                       <Guitar className="w-3.5 h-3.5" />
@@ -742,8 +742,8 @@ export default function GuestRoomView({
                             setSelectedPopupChord(pair.chords.trim())
                           }
                           className={`chord-symbol ${pair.chords?.trim()
-                              ? 'cursor-pointer hover:underline hover:text-amber-300'
-                              : ''
+                            ? 'cursor-pointer hover:underline hover:text-amber-300'
+                            : ''
                             }`}
                         >
                           {pair.chords || '\u00A0'}
@@ -857,17 +857,17 @@ export default function GuestRoomView({
                       <div
                         key={item.queueId}
                         className={`flex items-center justify-between gap-3 rounded-2xl p-3.5 sm:p-4 border transition ${idx === 0
-                            ? 'bg-amber-500/15 border-amber-500/50 shadow-md'
-                            : 'bg-zinc-950/80 border-zinc-800'
+                          ? 'bg-amber-500/15 border-amber-500/50 shadow-md'
+                          : 'bg-zinc-950/80 border-zinc-800'
                           }`}
                       >
                         <div className="flex items-center gap-3.5 min-w-0">
                           <div
                             className={`w-9 h-9 rounded-xl font-mono text-sm font-extrabold flex items-center justify-center shrink-0 ${idx === 0
-                                ? 'bg-amber-500 text-zinc-950 shadow'
-                                : idx === 1
-                                  ? 'bg-zinc-700 text-white'
-                                  : 'bg-zinc-800 text-zinc-400'
+                              ? 'bg-amber-500 text-zinc-950 shadow'
+                              : idx === 1
+                                ? 'bg-zinc-700 text-white'
+                                : 'bg-zinc-800 text-zinc-400'
                               }`}
                           >
                             {idx + 1}º
@@ -950,10 +950,10 @@ export default function GuestRoomView({
                   <div
                     key={song.id}
                     className={`rounded-2xl border p-4 flex items-center justify-between gap-3 transition ${isCurrentlyPlaying
-                        ? 'bg-amber-500/10 border-amber-500/40'
-                        : queueEntry
-                          ? 'bg-zinc-950/90 border-amber-500/30'
-                          : 'bg-zinc-950/60 border-zinc-800/90'
+                      ? 'bg-amber-500/10 border-amber-500/40'
+                      : queueEntry
+                        ? 'bg-zinc-950/90 border-amber-500/30'
+                        : 'bg-zinc-950/60 border-zinc-800/90'
                       }`}
                   >
                     <div className="min-w-0">
@@ -982,8 +982,8 @@ export default function GuestRoomView({
                       <button
                         onClick={() => handleVote(song.id)}
                         className={`px-4 py-3 rounded-xl font-extrabold text-xs sm:text-sm flex items-center gap-2 transition active:scale-95 cursor-pointer shrink-0 ${queueEntry
-                            ? 'bg-amber-500/20 hover:bg-amber-500 text-amber-300 hover:text-zinc-950 border border-amber-500/40'
-                            : 'bg-amber-500 hover:bg-amber-400 text-zinc-950 shadow-md shadow-amber-500/10'
+                          ? 'bg-amber-500/20 hover:bg-amber-500 text-amber-300 hover:text-zinc-950 border border-amber-500/40'
+                          : 'bg-amber-500 hover:bg-amber-400 text-zinc-950 shadow-md shadow-amber-500/10'
                           }`}
                       >
                         <ThumbsUp className="w-4 h-4" />
