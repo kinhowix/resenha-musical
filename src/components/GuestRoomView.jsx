@@ -475,11 +475,11 @@ export default function GuestRoomView({
                   <h3 className="text-base sm:text-lg font-extrabold text-white">
                     {remainingSeconds > 0
                       ? 'A nossa resenha de música começa em instantes!'
-                      : 'A Roda Começou! Solta a voz com a galera!'}
+                      : 'Começou! Solta a voz com a galera!'}
                   </h3>
                   <p className="text-xs sm:text-sm text-zinc-300 mt-0.5">
                     {remainingSeconds > 0
-                      ? 'Aproveite enquanto o relógio roda para já ir votando nas músicas abaixo e montar a fila!'
+                      ? 'Aproveite enquanto o relógio gira para já ir votando nas músicas abaixo e montar a fila!'
                       : 'Acompanhe a letra na tela e continue votando nas próximas músicas!'}
                   </p>
                 </div>
@@ -511,7 +511,7 @@ export default function GuestRoomView({
                 <div>
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-extrabold uppercase tracking-wider text-amber-400">
-                      Tocando Agora na Roda
+                      Tocando Agora na Resenha
                     </span>
                     <span className="px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-300 font-mono text-xs font-bold">
                       Tom: {currentKey}
@@ -578,7 +578,7 @@ export default function GuestRoomView({
           <Music className="w-5 h-5" />
           <span>
             {hasActiveRoom && !previewSongId
-              ? 'Cifra Tocando Agora'
+              ? 'Música Tocando Agora'
               : 'Ver Letra / Cifra'}
           </span>
         </button>

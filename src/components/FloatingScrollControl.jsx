@@ -31,11 +31,10 @@ export default function FloatingScrollControl({
       <button
         type="button"
         onClick={onToggleScroll}
-        className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-extrabold transition cursor-pointer ${
-          isAutoScrolling
+        className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-extrabold transition cursor-pointer ${isAutoScrolling
             ? 'bg-amber-500 text-zinc-950 shadow-lg shadow-amber-500/25'
             : 'bg-zinc-800 hover:bg-zinc-700 text-white'
-        }`}
+          }`}
       >
         {isAutoScrolling ? (
           <>
@@ -45,7 +44,7 @@ export default function FloatingScrollControl({
         ) : (
           <>
             <Play className="w-4 h-4 fill-current" />
-            <span>Rolar Cifra</span>
+            <span>Rolar Música</span>
           </>
         )}
       </button>
