@@ -349,7 +349,7 @@ export default function GuestRoomView({
                   Aqui na nossa resenha, <strong className="text-amber-400">as músicas, letras e cifras aparecem ao vivo na tela do celular de todo mundo</strong> para cantarmos juntos! Você também vota nas suas músicas preferidas para subirem no ranking da fila.
                 </p>
                 <p className="text-xs sm:text-sm text-zinc-300 leading-relaxed max-w-2xl">
-                  🔒 <strong className="text-white">As salas são exclusivas para convidados:</strong> para entrar na votação ao vivo, basta tocar no <strong className="text-emerald-400">link de convite enviado no seu WhatsApp</strong> (ou ler o QR Code da roda). Enquanto isso, você já pode explorar o repertório e enviar sugestões abaixo!
+                  🔒 <strong className="text-white">As salas são exclusivas para convidados:</strong> para entrar na votação ao vivo, basta tocar no <strong className="text-emerald-400">link de convite enviado no seu WhatsApp</strong> (ou ler o QR Code da sala). Enquanto isso, você já pode explorar o repertório e enviar sugestões abaixo!
                 </p>
               </div>
             </div>
