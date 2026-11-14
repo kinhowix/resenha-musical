@@ -343,10 +343,10 @@ export default function GuestRoomView({
                   <Sparkles className="w-3.5 h-3.5" /> Bem-vindo ao Resenha Musical
                 </span>
                 <h1 className="text-2xl sm:text-3xl font-extrabold text-white leading-tight">
-                  Cante junto com a roda direto pelo seu celular! 🎶
+                  Cante junto com a galera direto pelo seu celular! 🎶
                 </h1>
                 <p className="text-sm sm:text-base text-zinc-200 leading-relaxed max-w-2xl">
-                  Aqui na nossa roda, <strong className="text-amber-400">as músicas, letras e cifras aparecem ao vivo na tela do celular de todo mundo</strong> para cantarmos juntos! Você também vota nas suas músicas preferidas para subirem no ranking da fila.
+                  Aqui na nossa resenha, <strong className="text-amber-400">as músicas, letras e cifras aparecem ao vivo na tela do celular de todo mundo</strong> para cantarmos juntos! Você também vota nas suas músicas preferidas para subirem no ranking da fila.
                 </p>
                 <p className="text-xs sm:text-sm text-zinc-300 leading-relaxed max-w-2xl">
                   🔒 <strong className="text-white">As salas são exclusivas para convidados:</strong> para entrar na votação ao vivo, basta tocar no <strong className="text-emerald-400">link de convite enviado no seu WhatsApp</strong> (ou ler o QR Code da roda). Enquanto isso, você já pode explorar o repertório e enviar sugestões abaixo!
@@ -358,7 +358,7 @@ export default function GuestRoomView({
             <div className="bg-zinc-950/85 border border-zinc-800 rounded-2xl p-4 lg:w-80 shrink-0 space-y-3">
               <div>
                 <label className="block text-[11px] font-bold uppercase tracking-wider text-amber-400 mb-1">
-                  Seu Nome na Roda (Opcional):
+                  Seu Nome na Resenha (Opcional):
                 </label>
                 <input
                   type="text"
@@ -445,19 +445,17 @@ export default function GuestRoomView({
           {/* Contador Regressivo "Aquecendo o Gogó" */}
           {remainingSeconds !== null && (
             <div
-              className={`rounded-2xl p-4 sm:p-5 border flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition ${
-                remainingSeconds > 0
+              className={`rounded-2xl p-4 sm:p-5 border flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition ${remainingSeconds > 0
                   ? 'bg-gradient-to-r from-amber-500/20 via-zinc-950 to-zinc-950 border-amber-500/60 shadow-lg shadow-amber-500/10'
                   : 'bg-gradient-to-r from-emerald-500/20 via-zinc-950 to-zinc-950 border-emerald-500/50'
-              }`}
+                }`}
             >
               <div className="flex items-center gap-3.5">
                 <div
-                  className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 shadow-lg ${
-                    remainingSeconds > 0
+                  className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 shadow-lg ${remainingSeconds > 0
                       ? 'bg-amber-500 text-zinc-950'
                       : 'bg-emerald-500 text-zinc-950'
-                  }`}
+                    }`}
                 >
                   {remainingSeconds > 0 ? (
                     <Timer className="w-7 h-7 animate-pulse" />
@@ -467,9 +465,8 @@ export default function GuestRoomView({
                 </div>
                 <div>
                   <span
-                    className={`text-xs font-extrabold uppercase tracking-wider ${
-                      remainingSeconds > 0 ? 'text-amber-400' : 'text-emerald-400'
-                    }`}
+                    className={`text-xs font-extrabold uppercase tracking-wider ${remainingSeconds > 0 ? 'text-amber-400' : 'text-emerald-400'
+                      }`}
                   >
                     {remainingSeconds > 0
                       ? '🎤 Vão aquecendo o gogó!'
@@ -477,7 +474,7 @@ export default function GuestRoomView({
                   </span>
                   <h3 className="text-base sm:text-lg font-extrabold text-white">
                     {remainingSeconds > 0
-                      ? 'A nossa roda de violão começa em instantes!'
+                      ? 'A nossa resenha de música começa em instantes!'
                       : 'A Roda Começou! Solta a voz com a galera!'}
                   </h3>
                   <p className="text-xs sm:text-sm text-zinc-300 mt-0.5">
@@ -536,11 +533,10 @@ export default function GuestRoomView({
                     guestSection === 'lyrics' ? 'choose' : 'lyrics'
                   );
                 }}
-                className={`py-3 px-5 rounded-xl font-extrabold text-sm transition flex items-center justify-center gap-2 cursor-pointer shrink-0 ${
-                  guestSection === 'lyrics' && !previewSongId
+                className={`py-3 px-5 rounded-xl font-extrabold text-sm transition flex items-center justify-center gap-2 cursor-pointer shrink-0 ${guestSection === 'lyrics' && !previewSongId
                     ? 'bg-zinc-800 text-white hover:bg-zinc-700'
                     : 'bg-amber-500 hover:bg-amber-400 text-zinc-950 shadow-lg shadow-amber-500/25'
-                }`}
+                  }`}
               >
                 <Music className="w-4 h-4" />
                 {guestSection === 'lyrics' && !previewSongId
@@ -556,11 +552,10 @@ export default function GuestRoomView({
       <div className="grid grid-cols-2 gap-3">
         <button
           onClick={() => setGuestSection('choose')}
-          className={`py-3.5 px-4 rounded-2xl font-extrabold text-sm sm:text-base flex items-center justify-center gap-2 border transition cursor-pointer ${
-            guestSection === 'choose'
+          className={`py-3.5 px-4 rounded-2xl font-extrabold text-sm sm:text-base flex items-center justify-center gap-2 border transition cursor-pointer ${guestSection === 'choose'
               ? 'bg-amber-500 text-zinc-950 border-amber-400 shadow-lg shadow-amber-500/20'
               : 'bg-zinc-900 text-zinc-300 border-zinc-800 hover:bg-zinc-800'
-          }`}
+            }`}
         >
           <ThumbsUp className="w-5 h-5" />
           <span>
@@ -575,11 +570,10 @@ export default function GuestRoomView({
             if (hasActiveRoom) setPreviewSongId(null);
             setGuestSection('lyrics');
           }}
-          className={`py-3.5 px-4 rounded-2xl font-extrabold text-sm sm:text-base flex items-center justify-center gap-2 border transition cursor-pointer ${
-            guestSection === 'lyrics'
+          className={`py-3.5 px-4 rounded-2xl font-extrabold text-sm sm:text-base flex items-center justify-center gap-2 border transition cursor-pointer ${guestSection === 'lyrics'
               ? 'bg-amber-500 text-zinc-950 border-amber-400 shadow-lg shadow-amber-500/20'
               : 'bg-zinc-900 text-zinc-300 border-zinc-800 hover:bg-zinc-800'
-          }`}
+            }`}
         >
           <Music className="w-5 h-5" />
           <span>
@@ -640,11 +634,10 @@ export default function GuestRoomView({
                 <button
                   type="button"
                   onClick={() => setLyricsOnly((prev) => !prev)}
-                  className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-extrabold border transition cursor-pointer ${
-                    lyricsOnly
+                  className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-extrabold border transition cursor-pointer ${lyricsOnly
                       ? 'bg-amber-500 text-zinc-950 border-amber-400 shadow-lg shadow-amber-500/20'
                       : 'bg-zinc-950 border-zinc-800 text-zinc-200 hover:bg-zinc-800'
-                  }`}
+                    }`}
                 >
                   <Mic className="w-3.5 h-3.5" />
                   <span>
@@ -660,11 +653,10 @@ export default function GuestRoomView({
                     <button
                       type="button"
                       onClick={() => setIsSimplified((prev) => !prev)}
-                      className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-extrabold border transition cursor-pointer ${
-                        isSimplified
+                      className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-extrabold border transition cursor-pointer ${isSimplified
                           ? 'bg-emerald-500 text-zinc-950 border-emerald-400 shadow-lg shadow-emerald-500/20'
                           : 'bg-zinc-950 border-zinc-800 text-zinc-300 hover:bg-zinc-800'
-                      }`}
+                        }`}
                     >
                       <Sparkles className="w-3.5 h-3.5" />
                       <span>
@@ -675,11 +667,10 @@ export default function GuestRoomView({
                     <button
                       type="button"
                       onClick={() => setShowDiagrams((prev) => !prev)}
-                      className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border transition cursor-pointer ${
-                        showDiagrams
+                      className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border transition cursor-pointer ${showDiagrams
                           ? 'bg-amber-500/15 border-amber-500/40 text-amber-300'
                           : 'bg-zinc-950 border-zinc-800 text-zinc-400'
-                      }`}
+                        }`}
                     >
                       <Guitar className="w-3.5 h-3.5" />
                       <span>Desenhos</span>
@@ -750,11 +741,10 @@ export default function GuestRoomView({
                             pair.chords?.trim() &&
                             setSelectedPopupChord(pair.chords.trim())
                           }
-                          className={`chord-symbol ${
-                            pair.chords?.trim()
+                          className={`chord-symbol ${pair.chords?.trim()
                               ? 'cursor-pointer hover:underline hover:text-amber-300'
                               : ''
-                          }`}
+                            }`}
                         >
                           {pair.chords || '\u00A0'}
                         </span>
@@ -866,21 +856,19 @@ export default function GuestRoomView({
                     return (
                       <div
                         key={item.queueId}
-                        className={`flex items-center justify-between gap-3 rounded-2xl p-3.5 sm:p-4 border transition ${
-                          idx === 0
+                        className={`flex items-center justify-between gap-3 rounded-2xl p-3.5 sm:p-4 border transition ${idx === 0
                             ? 'bg-amber-500/15 border-amber-500/50 shadow-md'
                             : 'bg-zinc-950/80 border-zinc-800'
-                        }`}
+                          }`}
                       >
                         <div className="flex items-center gap-3.5 min-w-0">
                           <div
-                            className={`w-9 h-9 rounded-xl font-mono text-sm font-extrabold flex items-center justify-center shrink-0 ${
-                              idx === 0
+                            className={`w-9 h-9 rounded-xl font-mono text-sm font-extrabold flex items-center justify-center shrink-0 ${idx === 0
                                 ? 'bg-amber-500 text-zinc-950 shadow'
                                 : idx === 1
-                                ? 'bg-zinc-700 text-white'
-                                : 'bg-zinc-800 text-zinc-400'
-                            }`}
+                                  ? 'bg-zinc-700 text-white'
+                                  : 'bg-zinc-800 text-zinc-400'
+                              }`}
                           >
                             {idx + 1}º
                           </div>
@@ -961,13 +949,12 @@ export default function GuestRoomView({
                 return (
                   <div
                     key={song.id}
-                    className={`rounded-2xl border p-4 flex items-center justify-between gap-3 transition ${
-                      isCurrentlyPlaying
+                    className={`rounded-2xl border p-4 flex items-center justify-between gap-3 transition ${isCurrentlyPlaying
                         ? 'bg-amber-500/10 border-amber-500/40'
                         : queueEntry
-                        ? 'bg-zinc-950/90 border-amber-500/30'
-                        : 'bg-zinc-950/60 border-zinc-800/90'
-                    }`}
+                          ? 'bg-zinc-950/90 border-amber-500/30'
+                          : 'bg-zinc-950/60 border-zinc-800/90'
+                      }`}
                   >
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
@@ -994,11 +981,10 @@ export default function GuestRoomView({
                     {hasActiveRoom ? (
                       <button
                         onClick={() => handleVote(song.id)}
-                        className={`px-4 py-3 rounded-xl font-extrabold text-xs sm:text-sm flex items-center gap-2 transition active:scale-95 cursor-pointer shrink-0 ${
-                          queueEntry
+                        className={`px-4 py-3 rounded-xl font-extrabold text-xs sm:text-sm flex items-center gap-2 transition active:scale-95 cursor-pointer shrink-0 ${queueEntry
                             ? 'bg-amber-500/20 hover:bg-amber-500 text-amber-300 hover:text-zinc-950 border border-amber-500/40'
                             : 'bg-amber-500 hover:bg-amber-400 text-zinc-950 shadow-md shadow-amber-500/10'
-                        }`}
+                          }`}
                       >
                         <ThumbsUp className="w-4 h-4" />
                         <span>
