@@ -334,16 +334,17 @@ export default function GuestRoomView({
       {!hasActiveRoom ? (
         <div className="bg-gradient-to-br from-amber-500/20 via-zinc-900 to-zinc-900 border border-amber-500/40 rounded-3xl p-5 sm:p-8 shadow-2xl space-y-6">
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-            <div className="flex items-start gap-4">
+            <div className="flex flex-col items-center text-center lg:items-start lg:text-left gap-3">
               <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-amber-500 text-zinc-950 flex items-center justify-center shadow-lg shadow-amber-500/25 shrink-0">
                 <Guitar className="w-8 h-8 sm:w-9 sm:h-9 stroke-[2.2]" />
               </div>
-              <div className="space-y-2">
+              <div className="space-y-2 flex flex-col items-center lg:items-start">
                 <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/20 text-amber-300 text-xs font-extrabold uppercase tracking-wider">
                   <Sparkles className="w-3.5 h-3.5" /> Bem-vindo ao Resenha Musical
                 </span>
                 <h1 className="text-2xl sm:text-3xl font-extrabold text-white leading-tight">
-                  Cante junto com a galera direto pelo seu celular! 🎶
+                  Cante junto com a galera direto pelo seu celular!{' '}
+                  <Music className="inline-block w-6 h-6 text-amber-400 align-text-bottom" />
                 </h1>
                 <p className="text-sm sm:text-base text-zinc-200 leading-relaxed max-w-2xl">
                   Aqui na nossa resenha, <strong className="text-amber-400">as músicas, letras e cifras aparecem ao vivo na tela do celular de todo mundo</strong> para cantarmos juntos! Você também vota nas suas músicas preferidas para subirem no ranking da fila.
@@ -423,7 +424,8 @@ export default function GuestRoomView({
                 {roomName || 'Resenha Musical'}
               </h1>
               <p className="text-sm sm:text-base text-zinc-200 leading-relaxed max-w-2xl">
-                🎶 <strong className="text-amber-400">As letras e cifras aparecem ao vivo aqui na tela do seu celular</strong> para todo mundo cantar junto! Vote nas músicas abaixo para preparar a fila da nossa roda!
+                <Music className="inline-block w-4 h-4 text-amber-400 align-text-bottom mr-1.5" />
+                <strong className="text-amber-400">As letras e cifras aparecem ao vivo aqui na tela do seu celular</strong> para todo mundo cantar junto! Vote nas músicas abaixo para preparar a fila da nossa roda!
               </p>
             </div>
 
