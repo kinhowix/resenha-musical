@@ -1115,6 +1115,28 @@ export async function registerSongPlayed(
   currentSession,
   roomId
 ) {
+  const existingHistory = Array.isArray(currentSession?.history)
+    ? currentSession.history
+    : [];
+  const lastEntry = existingHistory[0];
+  const isRecentDuplicate =
+    lastEntry?.songId === songId &&
+    lastEntry?.playedAt &&
+    Date.now() - new Date(lastEntry.playedAt).getTime() < 180000;
+
+  if (isRecentDuplicate) {
+    if (roomId && nextSongId !== songId) {
+      await updateLiveSession(
+        {
+          currentSongId: nextSongId,
+          transpose: nextTranspose,
+        },
+        roomId
+      );
+    }
+    return;
+  }
+
   const now = new Date().toISOString();
   const newHistoryEntry = {
     historyId: `h-${Date.now()}`,
@@ -1124,7 +1146,7 @@ export async function registerSongPlayed(
 
   const updatedHistory = [
     newHistoryEntry,
-    ...(currentSession?.history || []).slice(0, 29),
+    ...existingHistory.slice(0, 29),
   ];
 
   const songs = getLocalSongs().map((s) =>

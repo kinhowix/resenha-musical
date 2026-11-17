@@ -204,11 +204,18 @@ export default function GuestRoomView({
     );
   }, [songs, search]);
 
-  // Mapa das músicas já tocadas nesta sala (histórico da sessão atual)
+  // Mapa das músicas já tocadas nesta sala (histórico da sessão atual, ignorando duplicatas em sequência)
   const playedInRoomMap = useMemo(() => {
     const map = new Map();
+    const lastSeenTime = new Map();
     (history || []).forEach((entry) => {
       if (!entry?.songId) return;
+      const entryTime = entry.playedAt ? new Date(entry.playedAt).getTime() : 0;
+      const prevTime = lastSeenTime.get(entry.songId);
+      if (prevTime !== undefined && Math.abs(prevTime - entryTime) < 180000) {
+        return;
+      }
+      lastSeenTime.set(entry.songId, entryTime);
       map.set(entry.songId, (map.get(entry.songId) || 0) + 1);
     });
     return map;
