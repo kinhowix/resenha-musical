@@ -14,6 +14,9 @@ import {
   Share2,
   MessageSquarePlus,
   Plus,
+  Award,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 
 export default function JukeboxView({
@@ -23,6 +26,8 @@ export default function JukeboxView({
   queue = [],
   autoSuggestedSongs = [],
   suggestions = [],
+  voterStats = {},
+  revealedChampion = null,
   currentSong,
   onPlayFromQueue,
   onPlayAutoSong,
@@ -31,10 +36,17 @@ export default function JukeboxView({
   onRemoveSuggestion,
   onClearSuggestions,
   onImportSuggestion,
+  onRevealChampion,
+  onHideChampion,
 }) {
   const [selectedSongId, setSelectedSongId] = useState(songs[0]?.id || '');
   const [requesterName, setRequesterName] = useState('');
   const [copied, setCopied] = useState(false);
+
+  const rankedVoters = Object.values(voterStats || {})
+    .filter((v) => v && v.name && v.votes > 0)
+    .sort((a, b) => b.votes - a.votes);
+  const topVoter = rankedVoters[0] || null;
 
   const shareUrl =
     typeof window !== 'undefined'
@@ -367,8 +379,110 @@ export default function JukeboxView({
         </div>
       </div>
 
-      {/* Coluna Direita: QR Code da Sala */}
+      {/* Coluna Direita: Ranking Secreto de Participação + QR Code da Sala */}
       <div className="space-y-6">
+        {/* Card Secreto do Mestre: Quem Mais Votou na Sala */}
+        <div className="bg-gradient-to-br from-amber-500/15 via-zinc-900 to-zinc-900 border border-amber-500/40 rounded-2xl p-5 space-y-4">
+          <div className="flex items-start justify-between gap-2">
+            <div className="flex items-center gap-2.5">
+              <div className="p-2 rounded-xl bg-amber-500/20 text-amber-400 shrink-0">
+                <Award className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-sm font-extrabold text-white">
+                  Ranking Secreto da Noite
+                </h3>
+                <p className="text-[11px] text-zinc-400">
+                  Só você (Mestre) vê este placar até revelar!
+                </p>
+              </div>
+            </div>
+            <span className="px-2 py-0.5 rounded-full bg-zinc-950 border border-amber-500/30 text-amber-300 text-[10px] font-bold uppercase shrink-0">
+              Privado
+            </span>
+          </div>
+
+          {rankedVoters.length === 0 ? (
+            <div className="text-center py-5 bg-zinc-950/60 border border-dashed border-zinc-800 rounded-xl text-xs text-zinc-400">
+              Nenhum voto com nome registrado ainda nesta sala.
+            </div>
+          ) : (
+            <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+              {rankedVoters.map((voter, idx) => (
+                <div
+                  key={`${voter.name}-${idx}`}
+                  className={`flex items-center justify-between gap-2 px-3 py-2 rounded-xl border text-xs ${
+                    idx === 0
+                      ? 'bg-amber-500/15 border-amber-500/50 text-white'
+                      : 'bg-zinc-950/70 border-zinc-800 text-zinc-300'
+                  }`}
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span
+                      className={`w-6 h-6 rounded-lg font-mono text-[11px] font-extrabold flex items-center justify-center shrink-0 ${
+                        idx === 0
+                          ? 'bg-amber-500 text-zinc-950'
+                          : 'bg-zinc-800 text-zinc-400'
+                      }`}
+                    >
+                      {idx + 1}º
+                    </span>
+                    <span className="font-bold truncate">{voter.name}</span>
+                  </div>
+                  <span className="font-extrabold text-amber-400 shrink-0">
+                    {voter.votes} {voter.votes === 1 ? 'voto' : 'votos'}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {topVoter && (
+            <div className="pt-2 border-t border-zinc-800/80 space-y-2">
+              {revealedChampion ? (
+                <div className="space-y-2">
+                  <div className="px-3 py-2 rounded-xl bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 text-xs font-bold text-center">
+                    🏆 Campeão revelado na tela de todos: {revealedChampion.name}!
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => onRevealChampion?.(topVoter)}
+                      className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 text-xs font-extrabold transition cursor-pointer"
+                    >
+                      <Eye className="w-3.5 h-3.5" /> Atualizar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onHideChampion?.()}
+                      className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-bold transition cursor-pointer"
+                    >
+                      <EyeOff className="w-3.5 h-3.5" /> Ocultar
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (
+                      window.confirm(
+                        `Revelar na tela de todos os convidados que "${topVoter.name}" foi o(a) grande campeão(ã) da noite com ${topVoter.votes} votos?`
+                      )
+                    ) {
+                      onRevealChampion?.(topVoter);
+                    }
+                  }}
+                  className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 text-xs font-extrabold shadow-lg shadow-amber-500/20 transition cursor-pointer"
+                >
+                  <Trophy className="w-4 h-4" />
+                  <span>Revelar Campeão na Tela de Todos</span>
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+
         <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 flex flex-col items-center text-center">
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/15 text-amber-400 text-xs font-semibold mb-3">
             <QrCode className="w-3.5 h-3.5" /> Convite da Sala

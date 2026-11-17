@@ -37,6 +37,8 @@ import {
   clearRoomHistory,
   slugifyRoomId,
   setRoomCountdown,
+  revealRoomChampion,
+  hideRoomChampion,
 } from './services/hybridStore';
 import ChordViewer from './components/ChordViewer';
 import SongListView from './components/SongListView';
@@ -349,6 +351,19 @@ export default function App() {
     await voteOrAddSongToQueue(songId, voterName, session, currentRoomId);
     const songTitle = songs.find((s) => s.id === songId)?.title || 'Música';
     showToast(`+1 ponto para "${songTitle}" no ranking da fila!`);
+  };
+
+  // Revelar ou ocultar Campeão(ã) de Participação da Noite
+  const handleRevealChampion = async (champion) => {
+    if (!currentRoomId || !champion) return;
+    await revealRoomChampion(champion, currentRoomId);
+    showToast(`🏆 Campeão "${champion.name}" revelado na tela de todos!`);
+  };
+
+  const handleHideChampion = async () => {
+    if (!currentRoomId) return;
+    await hideRoomChampion(currentRoomId);
+    showToast('Banner do campeão ocultado da tela dos convidados.');
   };
 
   // Convidado envia uma sugestão de música nova
@@ -726,6 +741,7 @@ export default function App() {
             hasActiveRoom={hasActiveRoom}
             roomName={session?.roomName}
             countdownTargetAt={session?.countdownTargetAt || null}
+            revealedChampion={session?.revealedChampion || null}
             songs={songs}
             currentSong={currentSong}
             transpose={effectiveTranspose}
@@ -790,6 +806,8 @@ export default function App() {
                 queue={session?.queue || []}
                 autoSuggestedSongs={autoSuggestedSongs}
                 suggestions={combinedSuggestions}
+                voterStats={session?.voterStats || {}}
+                revealedChampion={session?.revealedChampion || null}
                 currentSong={currentSong}
                 onPlayFromQueue={handlePlayFromQueue}
                 onPlayAutoSong={handlePlayAutoSuggested}
@@ -798,6 +816,8 @@ export default function App() {
                 onRemoveSuggestion={handleRemoveSuggestion}
                 onClearSuggestions={handleClearSuggestions}
                 onImportSuggestion={handleImportSuggestion}
+                onRevealChampion={handleRevealChampion}
+                onHideChampion={handleHideChampion}
               />
             )}
 

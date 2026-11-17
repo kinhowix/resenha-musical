@@ -44,6 +44,7 @@ export default function GuestRoomView({
   hasActiveRoom = true,
   roomName,
   countdownTargetAt = null,
+  revealedChampion = null,
   songs = [],
   currentSong,
   transpose = 0,
@@ -460,8 +461,38 @@ export default function GuestRoomView({
                 placeholder="Ex: Tio João, Ana..."
                 className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-3 py-2 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:border-amber-500"
               />
+              <p className="text-[10px] text-zinc-400 mt-1.5">
+                Coloque seu nome para concorrer ao ranking de participação da noite!
+              </p>
             </div>
           </div>
+
+          {/* Banner Especial: Revelação do Grande Campeão(ã) da Noite */}
+          {revealedChampion && (
+            <div className="rounded-2xl p-5 sm:p-6 bg-gradient-to-r from-amber-500/25 via-amber-500/15 to-zinc-950 border-2 border-amber-400 shadow-2xl shadow-amber-500/20 flex flex-col sm:flex-row items-center justify-between gap-4 text-center sm:text-left">
+              <div className="flex flex-col sm:flex-row items-center gap-4">
+                <div className="w-14 h-14 rounded-2xl bg-amber-500 text-zinc-950 flex items-center justify-center shadow-lg shadow-amber-500/30 shrink-0 animate-bounce">
+                  <Trophy className="w-8 h-8" />
+                </div>
+                <div>
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-500 text-zinc-950 text-[10px] font-extrabold uppercase tracking-wider mb-1">
+                    <Sparkles className="w-3 h-3" /> Grande Campeão(ã) da Noite!
+                  </span>
+                  <h2 className="text-xl sm:text-2xl font-extrabold text-white">
+                    {revealedChampion.name}
+                  </h2>
+                  <p className="text-xs sm:text-sm text-amber-200 font-medium">
+                    Parabéns pela participação na resenha com{' '}
+                    <strong className="text-white">
+                      {revealedChampion.votes}{' '}
+                      {revealedChampion.votes === 1 ? 'voto' : 'votos'}
+                    </strong>{' '}
+                    enviados hoje!
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Contador Regressivo "Aquecendo o Gogó" */}
           {remainingSeconds !== null && (

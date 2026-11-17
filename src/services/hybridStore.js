@@ -907,7 +907,10 @@ export async function deleteOldRooms(keepRoomId) {
  */
 export async function clearRoomQueueAndHistory(roomId) {
   if (!roomId) return null;
-  return await updateLiveSession({ queue: [], history: [] }, roomId);
+  return await updateLiveSession(
+    { queue: [], history: [], voterStats: {}, revealedChampion: null },
+    roomId
+  );
 }
 
 /**
@@ -1059,12 +1062,22 @@ export async function voteOrAddSongToQueue(
   if (!roomId) return [];
   const cleanVoter = voterName.trim() || 'Amigo da Roda';
   let baseQueue = [...(currentSession?.queue || [])];
+  let baseVoterStats =
+    currentSession?.voterStats && typeof currentSession.voterStats === 'object'
+      ? { ...currentSession.voterStats }
+      : {};
 
   if (db) {
     try {
       const snap = await withTimeout(getDoc(doc(db, 'sessions', roomId)), 2500);
-      if (snap.exists() && Array.isArray(snap.data()?.queue)) {
-        baseQueue = [...snap.data().queue];
+      if (snap.exists()) {
+        const snapData = snap.data();
+        if (Array.isArray(snapData?.queue)) {
+          baseQueue = [...snapData.queue];
+        }
+        if (snapData?.voterStats && typeof snapData.voterStats === 'object') {
+          baseVoterStats = { ...snapData.voterStats };
+        }
       }
     } catch {
       // usa fila local caso falhe
@@ -1103,9 +1116,53 @@ export async function voteOrAddSongToQueue(
     });
   }
 
+  // Contabiliza voto no Ranking Secreto de Participação (apenas para quem informou o nome)
+  if (cleanVoter.toLowerCase() !== 'amigo da roda') {
+    const voterKey =
+      cleanVoter
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9]+/g, '_')
+        .replace(/^_|_$/g, '') || 'convidado';
+    const prev = baseVoterStats[voterKey];
+    baseVoterStats[voterKey] = {
+      name: prev?.name || cleanVoter,
+      votes: (prev?.votes || 0) + 1,
+    };
+  }
+
   const sortedQueue = sortQueueByVotes(currentQueue);
-  await updateLiveSession({ queue: sortedQueue }, roomId);
+  await updateLiveSession(
+    { queue: sortedQueue, voterStats: baseVoterStats },
+    roomId
+  );
   return sortedQueue;
+}
+
+/**
+ * Mestre revela o Campeão(ã) de Participação da Noite na tela de todos da sala
+ */
+export async function revealRoomChampion(champion, roomId) {
+  if (!roomId || !champion) return;
+  await updateLiveSession(
+    {
+      revealedChampion: {
+        name: champion.name,
+        votes: champion.votes,
+        revealedAt: new Date().toISOString(),
+      },
+    },
+    roomId
+  );
+}
+
+/**
+ * Mestre oculta o banner do Campeão da Noite da tela dos convidados
+ */
+export async function hideRoomChampion(roomId) {
+  if (!roomId) return;
+  await updateLiveSession({ revealedChampion: null }, roomId);
 }
 
 export async function registerSongPlayed(
