@@ -16,6 +16,7 @@ import {
   Timer,
   Flame,
   LogIn,
+  CheckCircle2,
 } from 'lucide-react';
 import {
   parseChordProSong,
@@ -47,6 +48,7 @@ export default function GuestRoomView({
   currentSong,
   transpose = 0,
   queue = [],
+  history = [],
   autoSuggestedSongs = [],
   suggestions = [],
   onVoteSong,
@@ -201,6 +203,16 @@ export default function GuestRoomView({
         (s.rhythm && s.rhythm.toLowerCase().includes(search.toLowerCase()))
     );
   }, [songs, search]);
+
+  // Mapa das músicas já tocadas nesta sala (histórico da sessão atual)
+  const playedInRoomMap = useMemo(() => {
+    const map = new Map();
+    (history || []).forEach((entry) => {
+      if (!entry?.songId) return;
+      map.set(entry.songId, (map.get(entry.songId) || 0) + 1);
+    });
+    return map;
+  }, [history]);
 
   // Verifica 100% localmente (zero requisições) se a música que o amigo está digitando na sugestão já existe
   const suggestionMatchesInRepertoire = useMemo(() => {
@@ -947,6 +959,9 @@ export default function GuestRoomView({
                   ? queue.find((q) => q.songId === song.id)
                   : null;
                 const currentPoints = queueEntry ? queueEntry.votes ?? 1 : 0;
+                const playedCountInRoom = hasActiveRoom
+                  ? playedInRoomMap.get(song.id) || 0
+                  : 0;
 
                 return (
                   <div
@@ -955,17 +970,25 @@ export default function GuestRoomView({
                       ? 'bg-amber-500/10 border-amber-500/40'
                       : queueEntry
                         ? 'bg-zinc-950/90 border-amber-500/30'
-                        : 'bg-zinc-950/60 border-zinc-800/90'
+                        : playedCountInRoom > 0
+                          ? 'bg-zinc-950/40 border-emerald-500/25'
+                          : 'bg-zinc-950/60 border-zinc-800/90'
                       }`}
                   >
                     <div className="min-w-0">
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
                         <h3 className="font-bold text-white text-base truncate">
                           {song.title}
                         </h3>
                         {isCurrentlyPlaying && (
                           <span className="px-2 py-0.5 rounded-full bg-amber-500 text-zinc-950 text-[10px] font-extrabold uppercase shrink-0">
                             Tocando
+                          </span>
+                        )}
+                        {playedCountInRoom > 0 && !isCurrentlyPlaying && (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-[10px] font-bold shrink-0">
+                            <CheckCircle2 className="w-3 h-3" />
+                            Já tocada{playedCountInRoom > 1 ? ` (${playedCountInRoom}x)` : ' nesta festa'}
                           </span>
                         )}
                       </div>

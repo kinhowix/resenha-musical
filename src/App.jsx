@@ -730,6 +730,7 @@ export default function App() {
             currentSong={currentSong}
             transpose={effectiveTranspose}
             queue={session?.queue || []}
+            history={session?.history || []}
             autoSuggestedSongs={autoSuggestedSongs}
             suggestions={combinedSuggestions}
             onVoteSong={handleVoteOrAddSong}
